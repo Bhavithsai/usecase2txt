@@ -1,0 +1,9 @@
+Use case 2:
+
+Create AMI based on AWS Linux 2
+Create instance based on AMI
+Deprecate AMI and send notification to owner of instance
+Look at last launched time of deprecated AMIs
+If last launched time > x days deregister the AMI
+If last launched time < x days send a notification that AMI will be deregistered in y days
+After y days deregister the AMI and send notification
