@@ -1,0 +1,50 @@
+from constructs import Construct
+from aws_cdk import (
+    Duration,
+    Stack,
+    CfnOutput,
+    aws_iam as iam,
+    aws_sqs as sqs,
+    aws_sns as sns,
+    aws_ec2 as ec2,
+    aws_stepfunctions as sfn,
+    aws_sns_subscriptions as subs,
+)
+
+import aws_cdk  as cdk
+from aws_cdk import aws_sns_subscriptions as subscriptions
+
+
+class AmiDeprecateStack(Stack):
+
+    def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
+        super().__init__(scope, construct_id, **kwargs)
+          # Create an Amazon Linux 2 AMI
+        image = ec2.CfnImage(self, "MyAMI",
+            image_name="MyAmazonLinux2AMI",
+            image_location=ec2.CfnImage.ImageLocationProperty(bucket="my-bucket", key="my-image.raw"),
+            architecture="x86_64",
+            root_device_name="/dev/xvda",
+            block_device_mappings=[
+                {
+                    "deviceName": "/dev/xvda",
+                    "ebs": {
+                        "deleteOnTermination": True,
+                        "volumeSize": 10,
+                        "volumeType": "gp2"
+                    }
+                }
+            ],
+            virtualization_type="hvm",
+            description="My custom Amazon Linux 2 AMI"
+        )
+        # Create the SNS topic for notification
+
+        # Subscribe instance owner to SNS topic
+        #create SNS topic
+        notification_SNS_topic = sns.Topic(self, "SNS topic", topic_name="ami-depricate-teamC")
+        notification_SNS_topic.add_subscription(
+            subscriptions.EmailSubscription("bhavith.sai.poola@op.fi")
+        )
+
+    
