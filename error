@@ -1,0 +1,12 @@
+create_image_task = tasks.CallAwsService(self, "create AMI",
+            service = "ec2",
+            action = "createImage",
+            parameters = {
+                "Description" : "AMI for Deprecation Test",
+                "InstanceId": sfn.JsonPath.string_at("$.InstanceId"),
+                "Name" : "Deprecation-ami",
+                "NoReboot" : True
+            },
+            iam_resources = ["*"],
+            result_path = sfn.JsonPath.string_at("$.AMICreate"),
+        )
