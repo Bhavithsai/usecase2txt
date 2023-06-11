@@ -1,0 +1,67 @@
+from constructs import Construct
+import aws_cdk as cdk
+import json
+from aws_cdk import (
+    Stack,
+    aws_sns as sns,
+    aws_sns_subscriptions as subs,
+    aws_ec2 as ec2,
+    aws_stepfunctions as sfn,
+    aws_stepfunctions_tasks as tasks,
+)
+from aws_cdk import (Fn, CfnOutput,Duration)
+app = cdk.App()
+
+class AmiLifecycleWorkflowStack(Stack):
+
+    def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
+        super().__init__(scope, construct_id, **kwargs)
+        
+        instance_for_ami = tasks.CallAwsService(self, "instance Metadata", 
+            service = "ec2",
+            action = "describeInstances",
+            parameters = {
+                "InstanceIds" : sfn.JsonPath.string_at("States.Array($.InstanceId)")
+            },
+            iam_resources = ["*"],
+            result_path = sfn.JsonPath.string_at("$.InstanceDescription"),
+        )
+        #Create AMI from Existing EC2
+        create_image_task = tasks.CallAwsService(self, "create AMI",
+            service = "ec2",
+            action = "createImage",
+            parameters = {
+                "Description" : "AMI for Deprecation Test",
+                "InstanceId" : sfn.JsonPath.string_at("States.Array($.InstanceId)"),
+                "Name" : "Deprecation-ami",
+                "NoReboot" : True
+            },
+            iam_resources = ["*"],
+            result_path = sfn.JsonPath.string_at("$.AMICreate"),
+        )
+        
+        #Launch EC2 from New AMI
+        
+        create_ec2_task = tasks.CallAwsService(self, "new-server-from-ami",
+            service = "ec2",
+            action = "runInstances",
+            parameters = {
+                "ImageId" : sfn.JsonPath.string_at("$.AMICreate.ImageId"),
+                "MaxCount" : 1,
+                "MinCount" : 1,
+                "InstanceType" : "t2.micro",
+                "TagSpecifications" : [
+                    {
+                        "ResourceType" : "instance",
+                        "Tags" : [
+                            {
+                                "Key" : "Owner",
+                                "Value" : "abhishek.pal@op.fi"
+                            },
+                            ],
+                    },
+                    ],
+            },
+            iam_resources = ["*"],
+            result_path = sfn.JsonPath.string_at("$.NewAMIInstance"),
+        )
