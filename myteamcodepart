@@ -1,0 +1,64 @@
+instance_for_ami_task = tasks.CallAwsService(self, "instance Metadata", 
+            service = "ec2",
+            action = "describeInstances",
+            parameters = {
+                "InstanceIds" : sfn.JsonPath.string_at("States.Array($.InstanceId)")
+            },
+            iam_resources = ["*"],
+            result_path = sfn.JsonPath.string_at("$.InstanceDescription"),
+        )
+        #Create AMI from Existing EC2
+        create_image_task = tasks.CallAwsService(self, "create New AMI",
+            service = "ec2",
+            action = "createImage",
+            parameters = {
+                "Description" : "AMI for Deprecation Test",
+                "InstanceId" : sfn.JsonPath.string_at("$.InstanceId"),
+                "Name" : "Deprecation-ami-check",
+                "NoReboot" : True
+            },
+            iam_resources = ["*"],
+            result_path = sfn.JsonPath.string_at("$.NewAMI"),
+        )
+        
+        # #Launch EC2 from New AMI
+        
+        create_ec2_task = tasks.CallAwsService(self, "new-server-from-ami",
+            service = "ec2",
+            action = "runInstances",
+            parameters = {
+                "ImageId" : sfn.JsonPath.string_at("$.NewAMI.ImageId"),
+                "MaxCount" : 1,
+                "MinCount" : 1,
+                "InstanceType" : "t2.micro",
+                "SubnetId" : sfn.JsonPath.string_at("$.InstanceDescription.Reservations[0].Instances[0].NetworkInterfaces[0].SubnetId"),
+                #"VpcId" : sfn.JsonPath.string_at("$.InstanceDescription.Reservations[0].Instances[0].NetworkInterfaces[0].VpcId"),
+                "TagSpecifications" : [
+                    {
+                        "ResourceType" : "instance",
+                        "Tags" : [
+                            {
+                                "Key" : "Owner",
+                                "Value" : "abhishek.pal@op.fi"
+                            },
+                            {
+                                "Key" : "Purpose",
+                                "Value" : "deprecation-test"
+                            },
+                        ],
+                    },
+                ],
+            },
+            iam_resources = ["*"],
+            result_path = sfn.JsonPath.string_at("$.NewAMIInstance"),
+        )
+        
+        new_ami_description_task = tasks.CallAwsService(self, "describe-ami",
+            service = "ec2",
+            action = "describeImages",
+            parameters = {
+                "ImageIds" :{ sfn.JsonPath.string_at("$.NewAMI.ImageId")},
+            },
+            iam_resources = ["*"],
+            result_path = sfn.JsonPath.string_at("$.describeNewAmi"),
+        )
