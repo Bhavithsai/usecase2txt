@@ -1,0 +1,48 @@
+import json
+import boto3
+from datetime import datetime, timedelta
+import os
+
+def ami_handler(event, context):
+    
+    print("Event payload from step function !")
+    ami_input = json.dumps(event)
+    print("event input" + ami_input)
+    ami_id = event['input']
+    image_name = ""
+    for ami in ami_id:
+        image_name += ami
+    print("Image ID " + image_name)
+    
+    sns_client = boto3.client('sns')
+    ec2_client = boto3.client('ec2')
+    #sns_resource = boto3.resource('sns')
+    
+    #Create SNS topic to notify user
+    sns_topic_arn = os.environ['topic_arn']
+    print(sns_topic_arn)
+
+    #Depricate AMI
+    dep_date = datetime(2023, 6, 21)
+    depricate_ami = ec2_client.enable_image_deprecation(
+        ImageId = image_name,
+        DeprecateAt = dep_date
+        )
+        
+    #Send notification about depricated AMI
+    send_dep_note = sns_client.publish(
+        TopicArn = sns_topic_arn,
+        Subject = "AMI Deprication Notification",
+        Message = f'The AMI {image_name} will be depricated by Date {dep_date}'
+        )
+        
+    #Last launch date of AMI
+    last_launch_ami_time = ec2_client.describe_image_attribute(
+        Attribute = 'lastLaunchedTime',
+        ImageId = 'ami-0122fd36a4f50873a'
+        )
+    print(last_launch_ami_time)
+    #create_sns("AMI_notification_TeamC") 
+    return {
+        'statusCode': 200
+    }
