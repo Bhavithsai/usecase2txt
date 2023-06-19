@@ -1,0 +1,101 @@
+import json
+import os
+import boto3
+from datetime import datetime, timedelta
+
+ 
+
+print('Loading function')
+topic_arn = os.environ['topic_arn']
+image_id = os.environ['image_id']
+
+ 
+
+sns_client = boto3.client('sns')
+ec2_client = boto3.client('ec2')
+deregister_date = datetime(2023, 6, 21)
+
+ 
+
+def lambda_handler(event, context):
+
+    print("Image ID: " + image_id + " " + "and " + "SNS topic: " + topic_arn )
+
+    last_launch_ami_time = ec2_client.describe_image_attribute(
+        Attribute = 'lastLaunchedTime',
+        ImageId = image_id
+        )
+    print(last_launch_ami_time)
+    last_launch = last_launch_ami_time['LastLaunchedTime']
+    print(type(last_launch))
+    last_launch_datetime = ""
+    for i in last_launch:
+        last_launch_datetime = last_launch[i]
+    print(last_launch_datetime)
+
+    date_launch = datetime.strptime(last_launch_datetime, "%Y-%m-%dT%H:%M:%S.%fZ").date()
+    print(date_launch)
+
+    #send_dep_note = sns_client.publish(
+    #    TopicArn = topic_arn,
+    #    Subject = "AMI Deprication Notification",
+    #    Message = f'The AMI {image_id} will be deregister on {deregister_date}'
+    #    )
+
+'''
+
+call me once by Bhavith Poola
+Bhavith Poola
+17:23
+
+call me once
+
+  image_id ami-007b5537c4cf6e129 topic_arn ... by Abhishek Pal
+Abhishek Pal17:29
+
+ 
+
+image_id	ami-007b5537c4cf6e129
+topic_arn	arn:aws:sns:eu-central-1:600032437742:ami-lifecycle-topic-TeamC
+
+ 
+
+{   "errorMessage": "time data '2023-06-1... by Abhishek Pal
+Abhishek Pal17:38
+
+{
+  "errorMessage": "time data '2023-06-16T04:49:34Z' does not match format '%Y-%m-%dT%H:%M:%S.%fZ'",
+  "errorType": "ValueError",
+  "stackTrace": [
+    "  File \"/var/task/lambda_function.py\", line 30, in lambda_handler\n    date_launch = datetime.strptime(last_launch_datetime, \"%Y-%m-%dT%H:%M:%S.%fZ\").date()\n",
+    "  File \"/var/lang/lib/python3.7/_strptime.py\", line 577, in _strptime_datetime\n    tt, fraction, gmtoff_fraction = _strptime(data_string, format)\n",
+    "  File \"/var/lang/lib/python3.7/_strptime.py\", line 359, in _strptime\n    (data_string, format))\n"
+  ]
+}
+
+ 
+
+Function Logs
+Loading function
+START RequestId: 8cbd1a2c-348e-4fed-9cd2-54c187c74625 Version: $LATEST
+Image ID: ami-007b5537c4cf6e129 and SNS topic: arn:aws:sns:eu-central-1:600032437742:ami-lifecycle-topic-TeamC
+{'ImageId': 'ami-007b5537c4cf6e129', 'LastLaunchedTime': {'Value': '2023-06-16T04:49:34Z'}, 'ResponseMetadata': {'RequestId': 'c72386fd-8528-44ae-b057-834089d45095', 'HTTPStatusCode': 200, 'HTTPHeaders': {'x-amzn-requestid': 'c72386fd-8528-44ae-b057-834089d45095', 'cache-control': 'no-cache, no-store', 'strict-transport-security': 'max-age=31536000; includeSubDomains', 'content-type': 'text/xml;charset=UTF-8', 'content-length': '355', 'date': 'Mon, 19 Jun 2023 12:06:57 GMT', 'server': 'AmazonEC2'}, 'RetryAttempts': 0}}
+<class 'dict'>
+2023-06-16T04:49:34Z
+[ERROR] ValueError: time data '2023-06-16T04:49:34Z' does not match format '%Y-%m-%dT%H:%M:%S.%fZ'
+Traceback (most recent call last):
+  File "/var/task/lambda_function.py", line 30, in lambda_handler
+    date_launch = datetime.strptime(last_launch_datetime, "%Y-%m-%dT%H:%M:%S.%fZ").date()
+  File "/var/lang/lib/python3.7/_strptime.py", line 577, in _strptime_datetime
+    tt, fraction, gmtoff_fraction = _strptime(data_string, format)
+  File "/var/lang/lib/python3.7/_strptime.py", line 359, in _strptime
+    (data_string, format))
+END RequestId: 8cbd1a2c-348e-4fed-9cd2-54c187c74625
+REPORT RequestId: 8cbd1a2c-348e-4fed-9cd2-54c187c74625    Duration: 336.01 ms    Billed Duration: 337 ms    Memory Size: 128 MB    Max Memory Used: 88 MB    Init Duration: 665.40 ms
+
+ 
+
+Request ID
+8cbd1a2c-348e-4fed-9cd2-54c187c74625
+
+has context menu
