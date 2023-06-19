@@ -1,0 +1,208 @@
+from constructs import Construct
+import aws_cdk as cdk
+import json
+from aws_cdk import (
+    Stack,
+    aws_sns as sns,
+    aws_sns_subscriptions as subs,
+    aws_ec2 as ec2,
+    aws_stepfunctions as sfn,
+    aws_stepfunctions_tasks as tasks,
+    aws_lambda as _lambda,
+    aws_iam as _iam,
+)
+from aws_cdk import (Fn, CfnOutput,Duration)
+import boto3
+app = cdk.App()
+
+class AmiLifecycleWorkflowStack(Stack):
+
+    # def __init__(self, scope: Construct, construct_id: str, instance_id: str, ami_id: str, instance_type:str, subnet_id:str, **kwargs) -> None:
+    #     super().__init__(scope, construct_id, **kwargs)
+    def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
+        super().__init__(scope, construct_id, **kwargs)
+        ec2_client = boto3.client('ec2')
+        
+        # create_instance = ec2_client.run_instances(
+        #         BlockDeviceMappings=[
+        #             {
+        #                 'DeviceName': '/dev/sdh',
+        #                 'Ebs': {
+        #                     'VolumeSize': 100,
+        #                 },
+        #             },
+        #         ],
+        #         ImageId = self.ami_id,
+        #         InstanceType = self.instance_type,
+        #         MaxCount = 1,
+        #         MinCount = 1,
+        #         SubnetId = self.subnet_id,
+        #         TagSpecifications = [
+        #             {
+        #                 'ResourceType' : 'instance',
+        #                 'Tags' : [
+        #                     {
+        #                         'Key' : 'Purpose',
+        #                         'Value' : 'ami-test'
+        #                     },
+        #                   ],
+        #             },
+        #         ],
+        #     )
+        
+        instance_for_ami_task = tasks.CallAwsService(self, "instance Metadata", 
+            service = "ec2",
+            action = "describeInstances",
+            parameters = {
+                "InstanceIds" : sfn.JsonPath.string_at("States.Array($.InstanceId)")
+            },
+            iam_resources = ["*"],
+            result_path = sfn.JsonPath.string_at("$.InstanceDescription"),
+        )
+        #Create AMI from Existing EC2
+        create_image_task = tasks.CallAwsService(self, "create New AMI",
+            service = "ec2",
+            action = "createImage",
+            parameters = {
+                "Description" : "AMI for Deprecation Test",
+                "InstanceId" : sfn.JsonPath.string_at("$.InstanceId"),
+                "Name" : "Deprecation-ami-check",
+                "NoReboot" : True,
+                # "TagSpecifications" : [
+                #         {
+                #             "ResourceType" : "image",
+                #             "Tags" : [
+                #                 {
+                #                     "Key" : "ami-test",
+                #                     "Value" : "ami-lifecyle"
+                #                 },
+                #             ],
+                #         },
+                #     ],
+            },
+            iam_resources = ["*"],
+            result_path = sfn.JsonPath.string_at("$.NewAMI"),
+        )
+        
+        # #Launch EC2 from New AMI
+        
+        create_ec2_task = tasks.CallAwsService(self, "Create EC2 from new AMI",
+            service = "ec2",
+            action = "runInstances",
+            parameters = {
+                "ImageId" : sfn.JsonPath.string_at("$.NewAMI.ImageId"),
+                "MaxCount" : 1,
+                "MinCount" : 1,
+                "InstanceType" : "t2.micro",
+                "SubnetId" : sfn.JsonPath.string_at("$.InstanceDescription.Reservations[0].Instances[0].NetworkInterfaces[0].SubnetId"),
+                #"VpcId" : sfn.JsonPath.string_at("$.InstanceDescription.Reservations[0].Instances[0].NetworkInterfaces[0].VpcId"),
+            },
+            iam_resources = ["*"],
+            result_path = sfn.JsonPath.string_at("$.NewAMIInstance"),
+        )
+        
+        #Describe AMI
+        new_ami_description_task = tasks.CallAwsService(self, "ami status check",
+            service = "ec2",
+            action = "describeImages",
+            
+            parameters = {
+                "ImageIds" : sfn.JsonPath.string_at("States.Array($.NewAMI.ImageId)")
+                # "Filters" : [
+                #     {
+                #         "Name" : "image-id",
+                #         "Values" : "ami-094bd4069401a3ff5"
+                #     },
+                # ]
+            },
+            iam_resources = ["*"],
+            result_path = sfn.JsonPath.string_at("$.describeNewAmi"),
+        )
+        
+        #Create tags
+        tag_instance = tasks.CallAwsService(self, "Tag new Instance",
+            service="ec2",
+            action="createTags",
+            parameters={
+                "Resources":  sfn.JsonPath.string_at("States.Array($.NewAMIInstance.Instances[0].InstanceId)"),
+                "Tags": [
+                    {
+                        "Key": "purpose",
+                        "Value": "ami-lifecycle"
+                    },
+                    {
+                        "Key" : "owner",
+                        "Value" : "abhishek.pal@op.fi"
+                    },
+                ]
+            },
+            iam_resources = ["*"]
+            #result_path = sfn.JsonPath.string_at($.InstanceId)
+        )
+        
+        #Lambda role
+        lambda_role = _iam.Role(scope=self, id='cdk-lambda-role',
+                                assumed_by =_iam.ServicePrincipal('lambda.amazonaws.com'),
+                                role_name='cdk-lambda-role-teamc',
+                                managed_policies=[
+                                    # _iam.ManagedPolicy.from_aws_managed_policy_name(
+                                    #     'service-role/AmazonEC2FullAccess'),
+                                    _iam.ManagedPolicy.from_aws_managed_policy_name(
+                                        'service-role/AWSLambdaBasicExecutionRole')
+                                ])
+                                
+        #Define Lambda
+        depricate_ami_lambda = _lambda.Function(self, 'ami_life_cycle_lambda',
+                                                runtime=_lambda.Runtime.PYTHON_3_7,
+                                                function_name='ami-life-cycle-lambda',
+                                                description='Lambda function to depricate and deregister AMI',
+                                                code=_lambda.Code.from_asset('./lambda'),
+                                                handler='ami_lifecycle.ami_handler',
+                                                role=lambda_role,
+                                                environment={
+                                                    'NAME': 'AMI-dep-lambda'
+                                                }
+                                            )
+                                            
+        #step function to invoke lambda
+        lambda_ami_lifecycle = tasks.LambdaInvoke(self,
+            "AMI Lifecycle Handler Lambda",
+            lambda_function = depricate_ami_lambda,
+            invocation_type = tasks.LambdaInvocationType.EVENT,
+            integration_pattern=sfn.IntegrationPattern.WAIT_FOR_TASK_TOKEN,
+            #payload = sfn.JsonPath.string_at("$.describeNewAmi")
+            input_path = sfn.JsonPath.string_at("$.describeNewAmi.Images[0].ImageId"),
+            payload = sfn.TaskInput.from_object({
+                "token": sfn.JsonPath.task_token
+            })
+            # input_path = "$.describeNewAmi"
+            # payload = sfn.TaskInput.from_json_path_at({
+            #     "AmiId": sfn.JsonPath.string_at("$.describeNewAmi.Images[0].ImageId")
+            # })
+            #payload = ""
+        )
+        
+        is_ami_avaialbe_choice = sfn.Choice(self, "Is AMI available?")
+        
+        no_ami_available_con = sfn.Condition.not_(sfn.Condition.string_equals(variable="$.describeNewAmi.Images[0].State", value="Available"))
+        
+        ami_creation_complete_wait = sfn.Wait(self, "Wait for AMI Creation", time=sfn.WaitTime.duration(Duration.seconds(120)))
+        
+        ami_create_complete_pass = sfn.Pass(self, "AMI state available")
+        
+        chain = sfn.Chain.start(instance_for_ami_task).next(create_image_task).next(new_ami_description_task).next(is_ami_avaialbe_choice.when(
+            no_ami_available_con, ami_creation_complete_wait.next(create_ec2_task)).afterwards(include_otherwise=True)).next(tag_instance).next(lambda_ami_lifecycle)
+        
+        sm = sfn.StateMachine(self, "StateMachine",
+            definition = chain
+        )
+        
+        CfnOutput(self, "StepFunctionArn", description="Step function ARN",
+            value=sm.state_machine_arn       
+        )
+        
+        CfnOutput(self, "StpFunctionURL", description="Step Function URL",
+            value=Fn.sub("https://${AWS::Region}.console.aws.amazon.com/states/home?region=${AWS::Region}#/statemachines/view/${AMIStateMachine}",
+              {"AMIStateMachine": sm.state_machine_arn}
+            )       
+        )
