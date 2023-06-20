@@ -1,0 +1,103 @@
+import os
+import re
+from constructs import Construct
+import aws_cdk as cdk
+import aws_cdk.aws_ec2 as ec2
+from aws_cdk import assertions
+from aws_cdk import integ_tests_alpha
+from aws_cdk.assertions import Match, Capture, Template
+from aws_cdk import (aws_sns as sns, aws_stepfunctions as sfn, aws_stepfunctions_tasks)
+
+from ec2isolation.ec2isolation_sf_stack import Ec2IsolationsfStack
+
+app = cdk.App()
+accountid = app.node.try_get_context("accountid")
+region = app.node.try_get_context("region")
+env_test = cdk.Environment(account="600032437742", region="eu-central-1")
+ec2_isolationsf_stack_test = Ec2IsolationsfStack(app, "IsolationsfStack", env=env_test)
+#vpc = ec2.Vpc.from_lookup(vpc,"test", vpc_name = app.node.try_get_context("vpcname"), vpc_id=app.node.try_get_context("vpcid"))
+ec2_isolationsf_stack_template = assertions.Template.from_stack(ec2_isolationsf_stack_test)
+
+def test_capture_output():
+    
+    outputs = Capture()
+    
+    ec2_isolationsf_stack_template.has_output('*', props=outputs)
+    ec2_isolationsf_stack_template.find_outputs('*', props=outputs)
+    print(outputs)
+
+
+def test_attach_tag_to_instance():
+	
+	attach_tag_to_instance_api_call = integ_tests_alpha.AwsApiCall(ec2_isolationsf_stack_test, "attach_tag_to_instance_api_call",
+	service="ec2",
+	api="createTags"
+	)
+	
+	attach_tag_to_instance_integ_test = integ_tests_alpha.AwsApiCall(ec2_isolationsf_stack_test, "attach_tag_to_instance_integ_test",
+	service="ec2",
+	api="createTags",
+	parameters = {
+		"Resources": sfn.JsonPath.string_at("States.Array($.IsolatedInstanceId)"),
+		"Tags": [
+			{
+				"Key": "Status",
+				"Value": "Quarantine"
+			}
+		]
+	}
+	)
+	
+	integ = integ_tests_alpha.IntegTest(app, "attach_tag_to_instance",
+	test_cases=[ec2_isolationsf_stack_test])
+	
+	integ.assertions.aws_api_call("ec2", "createTags", {
+		"Resources": sfn.JsonPath.string_at("States.Array($.IsolatedInstanceId)"),
+		"Tags": [
+			{
+				"Key": "Status",
+				"Value": "Quarantine"
+			}
+		]
+	})
+
+def test_snapshot_volume():
+
+	create_snapshot_api_call = integ_tests_alpha.AwsApiCall(ec2_isolationsf_stack_test, "create_snapshot_api_call",
+	service="ec2",
+	api="createSnapshot"
+	)
+	
+	create_snapshot_integ_test = integ_tests_alpha.AwsApiCall(ec2_isolationsf_stack_test, "create_snapshot_integ_test",
+	service="ec2",
+	api="createTags",
+	parameters = {
+		"VolumeId": sfn.JsonPath.string_at("$.InstanceDescription.Reservations[0].Instances[0].BlockDeviceMappings[0].Ebs.VolumeId"),
+	}
+	)
+	integ = integ_tests_alpha.IntegTest(app, "create_snapshot",
+	test_cases=[ec2_isolationsf_stack_test])
+	
+	integ.assertions.aws_api_call("ec2", "createSnapshot", {
+		"VolumeId": sfn.JsonPath.string_at("$.InstanceDescription.Reservations[0].Instances[0].BlockDeviceMappings[0].Ebs.VolumeId"),
+	})
+	
+def test_sns_api_call():
+	
+    snsapi_call = integ_tests_alpha.AwsApiCall(ec2_isolationsf_stack_test, "Publish_test",
+    service="sns",
+    api="Publish"
+    )
+    
+def test_statemachine():
+    
+    definition = Capture()
+    ec2_isolationsf_stack_template.has_resource_properties(
+        "AWS::StepFunctions::StateMachine", {
+            "DefinitionString" : definition
+        }
+        )
+    
+def test_snapshot_stack(snapshot):
+    
+    assert ec2_isolationsf_stack_template.to_json() == snapshot
