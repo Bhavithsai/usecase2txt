@@ -1,0 +1,73 @@
+import json
+import boto3
+import datetime
+import time
+from dateutil.parser import parse
+
+
+def lambda_handler(event, context):
+    ec2 = boto3.resource('ec2',"eu-central-1")
+    sns = boto3.client('sns')
+    client = boto3.client('ec2')
+    
+    #print(event)
+    ami = event['Images'][0]['ImageId']
+    print(ami)
+    
+    creationdate = event['Images'][0]['CreationDate']
+    print(creationdate)
+    
+    snapshot_id = event['Images'][0]['BlockDeviceMappings'][0]['Ebs']['SnapshotId']
+    print(snapshot_id)
+    
+    AGE = 1
+
+    current_date = datetime.datetime.now().date()
+    
+    get_date_obj = parse(creationdate)
+    date_obj = get_date_obj.replace(tzinfo=None)
+    diff = datetime.datetime.now() - date_obj
+    day_old = diff.days
+    print(day_old)
+    
+
+    
+    if day_old >= AGE:
+        print ("Deleting AMI -> " + ami + " , AMI CreationDate = " + creationdate + " , SnapshotId = " + snapshot_id)
+        deregister_AMI = client.deregister_image(
+            ImageId=ami,
+            )
+        delete_ami_snapshot = client.delete_snapshot(
+            SnapshotId=snapshot_id,
+        )
+        
+        
+        instances = ec2.instances.filter(Filters=[{'Name': 'image-id', 'Values': [ami]}])
+        list_instance_owner = []
+        list_instance_id = []
+        for instance in instances:
+            if instance.tags != None:
+                for tags in instance.tags:
+                    if tags["Key"] == 'Owner':
+                        owner = tags["Value"]
+                        list_instance_owner.append(owner)
+                        list_instance_id.append(instance.id)
+            else:
+                instancename='-'
+    
+        print(list_instance_owner)
+        print(list_instance_id)
+        
+        email_address = list_instance_owner
+        
+        #for x in email_address:
+        #    owner_addr = x
+        #    response = sns.subscribe(
+        #        TopicArn='arn:aws:sns:eu-central-1:600032437742:amitest_topic',
+        #        Protocol='email',
+        #        Endpoint=owner_addr,
+        #    )
+        
+        new_line = '\n'
+        msg = f'The AMI used by following instances is Deregistered:{new_line} {new_line.join(list_instance_id)}'
+        sns.publish(TopicArn='arn:aws:sns:eu-central-1:600032437742:amitest_topic',Message=msg)
