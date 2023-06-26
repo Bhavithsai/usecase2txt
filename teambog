@@ -1,0 +1,253 @@
+import aws_cdk as cdk
+from aws_cdk import (Stack, aws_stepfunctions as sfn, aws_stepfunctions_tasks as tasks, aws_ec2 as ec2, aws_imagebuilder as imagebuilder, aws_iam as iam, aws_lambda as _lambda)
+from aws_cdk import (Fn, CfnOutput,Duration)
+from aws_cdk import (aws_sns as sns, aws_sns_subscriptions as subscriptions)
+from constructs import Construct
+
+class AmiLifecycleStack(Stack):
+
+    def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
+        super().__init__(scope, construct_id, **kwargs)
+        
+        
+        AmiDeprecationSNS_lambda = _lambda.Function(
+            self, 'AmiDeprecationSNS',
+            runtime=_lambda.Runtime.PYTHON_3_9,
+            code=_lambda.Code.from_asset('lambda'),
+            handler='lambda_function.lambda_handler',
+            timeout = Duration.minutes(15),
+            )
+        AmiDeprecationSNS_lambda.add_to_role_policy(iam.PolicyStatement
+        (effect=iam.Effect.ALLOW,
+        actions=[
+            'ec2:*',
+            'sns:*',
+            ],
+        resources=['*'],
+        ))
+        
+        AmiDeregisterSNS_lambda = _lambda.Function(
+            self, 'AmiDeregisterSNS',
+            runtime=_lambda.Runtime.PYTHON_3_9,
+            code=_lambda.Code.from_asset('deregister_lambda'),
+            handler='lambda_function.lambda_handler',
+            timeout = Duration.minutes(15),
+            )
+        AmiDeregisterSNS_lambda.add_to_role_policy(iam.PolicyStatement
+        (effect=iam.Effect.ALLOW,
+        actions=[
+            'ec2:*',
+            'sns:*',
+            ],
+        resources=['*'],
+        ))
+        
+        AmiLaunchtimeSNS_lambda = _lambda.Function(
+            self, 'AmiLaunchtimeSNS',
+            runtime=_lambda.Runtime.PYTHON_3_9,
+            code=_lambda.Code.from_asset('launchtime_lambda'),
+            handler='lambda_function.lambda_handler',
+            timeout = Duration.minutes(15),
+            )
+        AmiLaunchtimeSNS_lambda.add_to_role_policy(iam.PolicyStatement
+        (effect=iam.Effect.ALLOW,
+        actions=[
+            'ec2:*',
+            'sns:*',
+            ],
+        resources=['*'],
+        ))
+
+
+        # Main code starts here
+        # Step Function stage creation
+        # Stepfunction stage to create Image recipe
+
+        Create_Image_Recipe = tasks.CallAwsService(self,"Create Image Recipe",
+        service = "imagebuilder",
+        action = "createImageRecipe",
+        parameters = {
+            "Name": "amitestrecipe",
+            "SemanticVersion" : "1.0.0",
+            "Components": [
+                {
+                    "ComponentArn": "arn:aws:imagebuilder:eu-central-1:aws:component/aws-cli-version-2-linux/x.x.x"
+                },
+                {
+                    "ComponentArn": "arn:aws:imagebuilder:eu-central-1:aws:component/amazon-cloudwatch-agent-linux/x.x.x"
+                },
+                {
+                    "ComponentArn" : "arn:aws:imagebuilder:eu-central-1:aws:component/reboot-test-linux/x.x.x"
+                }
+            ],
+            "ParentImage" : "arn:aws:imagebuilder:eu-central-1:aws:image/amazon-linux-2-x86/x.x.x",
+            "ClientToken" : "amitesting12"
+        },
+        iam_resources=["*"],
+        result_path=sfn.JsonPath.string_at("$.Imagerecipe"),
+        )
+        
+        Create_Infra_Config = tasks.CallAwsService(self,"Create Infra Config",
+        service = "imagebuilder",
+        action = "createInfrastructureConfiguration",
+        parameters = {
+            "Name" : "amitestinfra",
+            "InstanceProfileName": "Image-builder-test",
+            "InstanceTypes" : ["t2.micro"],
+            "SubnetId" : "subnet-0f52fef29b82ad16a",
+            "SecurityGroupIds" : ["sg-0591f98b136627e5c"],
+            "TerminateInstanceOnFailure": False,
+            "ClientToken" : "amitestinginfra12"
+        },
+        iam_resources=["*"],
+        result_path=sfn.JsonPath.string_at("$.Imageinfra"),
+        )
+        
+        Create_Image = tasks.CallAwsService(self,"Create Image",
+        service = "imagebuilder",
+        action = "createImage",
+        parameters = {
+            "ImageRecipeArn": sfn.JsonPath.string_at("$.Imagerecipe.ImageRecipeArn"),
+            "InfrastructureConfigurationArn" : sfn.JsonPath.string_at("$.Imageinfra.InfrastructureConfigurationArn"),
+            "ClientToken" : "amitestingimage12"
+        },
+        iam_resources=["*"],
+        result_path=sfn.JsonPath.string_at("$.Image"),
+        )
+        
+        #Describe Image
+        Describe_Image = tasks.CallAwsService(self,"Describe Image",
+        service = "ec2",
+        action = "describeImages",
+        parameters = {
+            "Filters" : [
+                {
+                    "Name" : "tag:Ec2ImageBuilderArn",
+                    "Values": sfn.JsonPath.string_at("States.Array($.Image.ImageBuildVersionArn)")
+                },
+                ]
+        },
+        iam_resources=["*"],
+        result_path=sfn.JsonPath.string_at("$.DescribeImage"),
+        )
+        
+        
+        # Create Instance
+        Create_Instance = tasks.CallAwsService(self, "Create Instance",
+            service="ec2",
+            action="runInstances",
+            parameters={
+                "MaxCount": 1,
+                "MinCount": 1,
+                "InstanceType": "t2.micro",
+                "ImageId": sfn.JsonPath.string_at("$.DescribeImage.Images[0].ImageId"),
+                "SubnetId": "subnet-0f52fef29b82ad16a",
+                "TagSpecifications" : [
+                    {
+                        "ResourceType" : "instance",
+                        "Tags": [
+                            {
+                                "Key" : "Name",
+                                "Value" : "AMITesting"   
+                                
+                            },
+                            {
+                                "Key" : "Owner",
+                                "Value" : "supritha.k@op.fi"
+                            }
+                        ]
+                    }
+                ]
+            },
+            iam_resources=["*"],
+            result_path=sfn.JsonPath.string_at("$.CreateInstance"),
+        )
+        
+        Describe_Instance = tasks.CallAwsService(self,"Describe Instance",
+        service = "ec2",
+        action = "describeInstances",
+        parameters = {
+            "Filters" : [
+                {
+                    "Name" : "instance-id",
+                    "Values": sfn.JsonPath.string_at("States.Array($.CreateInstance.Instances[0].InstanceId)")
+                },
+                ]
+        },
+        iam_resources=["*"],
+        result_path=sfn.JsonPath.string_at("$.DescribeInstance"),
+        )
+        
+        #Enable Deprecation
+        Enable_Deprecation = tasks.CallAwsService(self,"Enable Deprecation",
+        service = "ec2",
+        action = "enableImageDeprecation",
+        parameters = {
+            "DeprecateAt": "2023-06-27T12:00:00Z",
+            "ImageId" : sfn.JsonPath.string_at("$.DescribeImage.Images[0].ImageId")
+        },
+        iam_resources=["*"],
+        result_path=sfn.JsonPath.string_at("$.DeprecateImage"),
+        )
+        
+        Invoke_Deprecate_Lambda = tasks.LambdaInvoke(self, "Invoke Deprecate Lambda",
+        lambda_function = AmiDeprecationSNS_lambda,
+        payload = sfn.TaskInput.from_json_path_at("$.DescribeImage"),
+        result_path = sfn.JsonPath.DISCARD
+        )
+        
+        Invoke_Launchtime_Lambda = tasks.LambdaInvoke(self, "Invoke LaunchTime Lambda",
+        lambda_function = AmiLaunchtimeSNS_lambda,
+        payload = sfn.TaskInput.from_json_path_at("$.DescribeImage"),
+        result_path = sfn.JsonPath.DISCARD
+        )
+        
+        
+        Invoke_Deregister_Lambda = tasks.LambdaInvoke(self, "Invoke Deregister Lambda",
+        lambda_function = AmiDeregisterSNS_lambda,
+        payload = sfn.TaskInput.from_json_path_at("$.DescribeImage"),
+        result_path = sfn.JsonPath.DISCARD
+        )
+        
+        wait_state_for_AMI_creation = sfn.Wait(self, "Wait state for AMI Build and Test", 
+        time=sfn.WaitTime.duration(Duration.minutes(25)))
+        
+        AMI_Choice = sfn.Choice(self, " Is AMI Available ? ")
+    
+        
+        AMI_creation_successful = sfn.Condition.string_equals(variable="$.DescribeImage.Images[0].State", value="available")
+        
+        wait_for_AMI_creation = sfn.Wait(self, "Wait for to be AMI Created", 
+        time=sfn.WaitTime.duration(Duration.seconds(60)))
+        
+        Instance_State_Choice = sfn.Choice(self, " Is Instance state=Running ? ")
+        
+        Is_Instance_Running = sfn.Condition.string_equals(variable="$.DescribeInstance.Reservations[0].Instances[0].State.Name", value="running")
+        
+        wait_for_Instance_Initialization = sfn.Wait(self, "Wait for Instance to Initialize", 
+        time=sfn.WaitTime.duration(Duration.seconds(30)))
+        
+        wait_state =sfn.Wait(self,"wait state ",
+        time=sfn.WaitTime.duration(Duration.seconds(20)))
+        
+        snapshot_State_Choice = sfn.Choice(self, " is Snapshot Available ? ")
+        
+        Is_snapshot_Available = sfn.Condition.is_present(variable="$.DescribeImage.Images[0].BlockDeviceMappings[0].Ebs.SnapshotId")
+        
+        Image_is_deregistered = sfn.Pass(self, "Image is Deregistered")
+        
+        sm_definition = sfn.Chain.start(Create_Image_Recipe).next(Create_Infra_Config).next(Create_Image).next(wait_state_for_AMI_creation).next(Describe_Image).next(AMI_Choice.when(
+            AMI_creation_successful, Create_Instance.next(Describe_Instance).next(
+            Instance_State_Choice.when(Is_Instance_Running, Enable_Deprecation.next(Invoke_Deprecate_Lambda).next(wait_state).next(Invoke_Launchtime_Lambda).next(snapshot_State_Choice.when(
+                Is_snapshot_Available, Invoke_Deregister_Lambda).otherwise(Image_is_deregistered))).otherwise(
+            wait_for_Instance_Initialization.next(Describe_Instance)))).otherwise(wait_for_AMI_creation.next(Describe_Image)))
+            
+            
+        
+        #create state machine 
+        
+        AMI_creation_StateMachine = sfn.StateMachine(self, "StateMachine",
+            state_machine_name = "amitest_sfn",
+            definition=sm_definition
+            )
+        
