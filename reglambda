@@ -1,0 +1,106 @@
+import json
+import boto3
+import datetime
+from datetime import date
+import time
+from dateutil.parser import parse
+
+
+def lambda_handler(event, context):
+    ec2 = boto3.resource('ec2',"eu-central-1")
+    sns = boto3.client('sns')
+    client = boto3.client('ec2')
+    
+    #print(event)
+    ami = event['Images'][0]['ImageId']
+    print(ami)
+    snapshot_id = event['Images'][0]['BlockDeviceMappings'][0]['Ebs']['SnapshotId']
+    print(snapshot_id)
+    
+    current_date = datetime.datetime.now().date()
+    print(current_date)
+    today = date.today()
+    print(today)
+    
+    yesterday_date = today - datetime.timedelta(days = 1)
+    print(yesterday_date)
+    
+    currentTime = datetime.datetime.now()
+    yesterday = (currentTime - datetime.timedelta(days=1)).timestamp()
+    #print(currentTime)
+    #print(yesterday)
+    
+    instances = list(
+        ec2.instances.filter(
+            Filters=[
+                {"Name": "image-id", "Values": [ami]},
+            ]
+        )
+    )
+
+
+    instances_24hours_old = list(
+        filter(lambda instance: instance.launch_time.date() <= yesterday_date, instances)
+    )
+    
+    print(instances_24hours_old)
+    elements_list = len(instances_24hours_old)
+    print(elements_list)
+    
+    lastlaunchtime = client.describe_image_attribute(
+        Attribute = 'lastLaunchedTime',
+        ImageId = ami
+        )
+    print(lastlaunchtime)
+    
+    LastLaunchedTime = lastlaunchtime['LastLaunchedTime']['Value']
+    print(LastLaunchedTime)
+    
+    AGE = 2
+
+    
+    get_date_obj = parse(LastLaunchedTime)
+    date_obj = get_date_obj.replace(tzinfo=None)
+    diff = datetime.datetime.now() - date_obj
+    day_old = diff.days
+    print(day_old)
+    
+    instances = ec2.instances.filter(Filters=[{'Name': 'image-id', 'Values': [ami]}])
+    list_instance_owner = []
+    list_instance_id = []
+    for instance in instances:
+        if instance.tags != None:
+            for tags in instance.tags:
+                if tags["Key"] == 'Owner':
+                    owner = tags["Value"]
+                    list_instance_owner.append(owner)
+                    list_instance_id.append(instance.id)
+        else:
+            instancename='-'
+    
+    print(list_instance_owner)
+    print(list_instance_id)
+        
+    email_address = list_instance_owner
+    
+    if elements_list > 0 :
+        print ("AMI is in use")
+        
+        new_line = '\n'
+        msg = f'The AMI used by following instances will be deprecated soon:{new_line} {new_line.join(list_instance_id)}'
+        sns.publish(TopicArn='arn:aws:sns:eu-central-1:600032437742:amitest_topic',Message=msg)
+    elif day_old < AGE :
+        new_line = '\n'
+        msg = f'The AMI used by following instances will be deprecated soon:{new_line} {new_line.join(list_instance_id)}'
+        sns.publish(TopicArn='arn:aws:sns:eu-central-1:600032437742:amitest_topic',Message=msg)
+    else:
+        deregister_AMI = client.deregister_image(
+            ImageId=ami,
+            )
+        delete_ami_snapshot = client.delete_snapshot(
+            SnapshotId=snapshot_id,
+        )
+        new_line = '\n'
+        msg = f'The AMI is deregistered:{new_line} {new_line.join(list_instance_id)}'
+        sns.publish(TopicArn='arn:aws:sns:eu-central-1:600032437742:amitest_topic',Message=msg)
+        
