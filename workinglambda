@@ -1,0 +1,109 @@
+import json
+import boto3
+from datetime import datetime, timedelta, date
+import os
+
+def ami_handler(event, context):
+    
+    sns_client = boto3.client('sns')
+    ec2_client = boto3.client('ec2')
+    sns_topic_arn = os.environ['topic_arn']
+    #dep_date = datetime(2023, 6, 27)
+    #deregister_date = datetime(2023, 6, 28).date()
+    x = 2
+    last_launch_datetime = ""
+    remaining_days = ""
+    
+    print("Event payload from step function !")
+    print(event)
+    image_name = event['input'][0]
+    print(image_name)
+    # ami_input = json.dumps(event)
+    # print(ami_input)
+    # ami_id = event['input']
+    # image_name = ""
+    # for ami in ami_id:
+    #     image_name += ami
+    
+    #dep_date = datetime(2023, 6, 28)
+    #deregister_date = datetime(2023, 6, 29).date()
+    des_image = ec2_client.describe_images(ImageIds = [image_name])['Images']
+    
+    creation_date_1 = des_image[0]['CreationDate']
+    
+    creation_date_obj = datetime.strptime(creation_date_1, "%Y-%m-%dT%H:%M:%S.%fZ")
+    dep_date = creation_date_obj + timedelta(days = x)
+    print(dep_date)
+    #print(type(dep_date))
+    deregister_date = dep_date + timedelta(days=3)
+    print(deregister_date)
+    snapshot_id = des_image[0]['BlockDeviceMappings'][0]['Ebs']['SnapshotId']
+    
+    #Depricate AMI
+    depricate_ami = ec2_client.enable_image_deprecation(
+        ImageId = image_name,
+        DeprecateAt = dep_date
+        )
+        
+    #Send notification about depricated AMI
+    send_dep_note = sns_client.publish(
+        TopicArn = sns_topic_arn,
+        Subject = "AMI Deprication Notification",
+        Message = f'The AMI {image_name} will be depricated by Date {dep_date}'
+        )
+        
+    #Last launch date of AMI
+    last_launch_ami_time = ec2_client.describe_image_attribute(
+        Attribute = 'lastLaunchedTime',
+        ImageId = image_name
+        )
+    #print(last_launch_ami_time)
+    
+    last_launch = last_launch_ami_time['LastLaunchedTime']
+    
+    # for i in last_launch:
+    #     last_launch_datetime = last_launch[i]
+    #     print(last_launch_datetime)
+    
+    #if last_launch_datetime != '':
+    if last_launch !='':
+        
+        #last_launch_date = datetime.strptime(last_launch_datetime, "%Y-%m-%dT%H:%M:%SZ").date()
+        last_launch_date = datetime.strptime(last_launch, "%Y-%m-%dT%H:%M:%SZ").date()
+        if last_launch_date > deregister_date:
+            
+            ec2_client.deregister_image(ImageId = image_name)
+            
+            dereg_msge = sns_client.publish(
+                TopicArn = sns_topic_arn,
+                Subject = "AMI Deregistered",
+                Message = f'The AMI {image_name} is deregistered and snapshot is created {snapshot_id}'
+                )
+        else:
+            delta = deregister_date - last_launch_date
+            remaining_days = delta.days
+            dereg_msge = sns_client.publish(
+                TopicArn = sns_topic_arn,
+                Subject = "AMI Deregister Notification",
+                Message = f'The AMI {image_name} will be deregistered after {remaining_days} days'
+                )
+    else:
+        last_launch_note = sns_client.publish(
+            TopicArn = sns_topic_arn,
+            Subject = "AMI Last Launch Notification",
+            Message = f'The AMI {image_name} is launched within 24 Hours. Launch time will be updated after 24 hrs'
+            )
+        print("AMI was launched within 24 Hours")
+        
+    if date.today() == deregister_date:
+        #Take snapshot of AMI
+        ec2_client.deregister_image(ImageId = image_name)
+        deregister_note = sns_client.publish(
+            TopicArn = sns_topic_arn,
+            Subject = "AMI Deregister Notification",
+            Message = f'The AMI {image_name} is deregistered on {deregister_date} and snapshot is created {snapshot_id}'
+            )
+    
+    return {
+        'statusCode': 200
+    }
