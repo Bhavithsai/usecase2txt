@@ -1,0 +1,160 @@
+from constructs import Construct
+import aws_cdk as cdk
+import json
+from aws_cdk import (
+    Stack,
+    aws_sns as sns,
+    aws_sns_subscriptions as subs,
+    aws_ec2 as ec2,
+    aws_stepfunctions as sfn,
+    aws_stepfunctions_tasks as tasks,
+    aws_lambda as _lambda,
+    aws_iam as _iam,
+    aws_events as events,
+    aws_events_targets as targets,
+)
+from aws_cdk import (Fn, CfnOutput,Duration)
+import boto3
+app = cdk.App()
+
+class AmiLifecycleWorkflowStack(Stack):
+
+    def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
+        super().__init__(scope, construct_id, **kwargs)
+        ec2_client = boto3.client('ec2')
+        
+        #Create AMI from Existing EC2
+        create_image_task = tasks.CallAwsService(self, "Create Image",
+            service = "ec2",
+            action = "createImage",
+            parameters = {
+                "Description" : "AMI for Deprecation Test",
+                "InstanceId" : sfn.JsonPath.string_at("$.InstanceId"),
+                "Name" : "Deprecation-ami-check",
+                "NoReboot" : True,
+            },
+            iam_resources = ["*"],
+            result_path = sfn.JsonPath.string_at("$.NewAMI"),
+        )
+        
+        #Create EventBridge Rule
+        create_eventbridge_rule_task = tasks.CallAwsService(self, "Create EventBridge Rule",
+            service = "eventBridge",
+            action = "putRule",
+            parameters = {
+                "Name" : "ami_event_rule_TeamC",
+                "State" : "ENABLED",
+                "Description" : "Lambda will be triggered once rule matched",
+                "EventBusName" : "default",
+                "EventPattern" : 
+                    {
+                      "source": ["aws.ec2"],
+                      "detail-type": ["EC2 AMI State Change"],
+                      "detail": {"ImageId": sfn.JsonPath.string_at("States.Array($.NewAMI.ImageId)"),"State": ["available"]}
+                    }
+                
+            },
+            iam_resources = ["*"],
+            additional_iam_statements=[
+                    _iam.PolicyStatement(
+                        actions=["events:putRule"],
+                        resources=["*"]
+                    )
+                ],
+            result_path = sfn.JsonPath.string_at("$.EventRules"),
+        )
+
+        #Create SNS Topic
+        AMI_SNS_topic = sns.Topic(self,
+            "SNS topic",
+            topic_name="ami-lifecycle-topic-TeamC"
+        )
+        AMI_SNS_topic.add_subscription(
+            subs.EmailSubscription("abhishek.pal@op.fi")
+        )
+        #Lambda role
+        lambda_role = _iam.Role(scope=self, id='cdk-lambda-role',
+                                assumed_by =_iam.ServicePrincipal('lambda.amazonaws.com'),
+                                role_name='cdk-lambda-role-teamc',
+                                managed_policies=[
+                                    _iam.ManagedPolicy.from_aws_managed_policy_name('AmazonEC2FullAccess'),
+                                    _iam.ManagedPolicy.from_aws_managed_policy_name('AmazonSNSFullAccess'),
+                                    _iam.ManagedPolicy.from_aws_managed_policy_name('service-role/AWSLambdaBasicExecutionRole')
+                                ])
+                                
+        #Define Lambda
+        depricate_ami_lambda = _lambda.Function(self, 'ami_life_cycle_lambda',
+                                                runtime=_lambda.Runtime.PYTHON_3_9,
+                                                function_name='ami-life-cycle-lambda',
+                                                description='Lambda function to depricate and deregister AMI',
+                                                code=_lambda.Code.from_asset('./lambda'),
+                                                handler='ami_lifecycle.ami_handler',
+                                                timeout = cdk.Duration.seconds(60),
+                                                role=lambda_role,
+                                                environment={
+                                                    'NAME': 'AMI-dep-lambda'
+                                                }
+                                            )
+        depricate_ami_lambda.add_environment("topic_arn", AMI_SNS_topic.topic_arn)
+ 
+        #Add resource based permission to lambda
+        add_permission_to_lambda = _lambda.CfnPermission(self, "PermissionToLambda",
+            action = "lambda:*",
+            function_name = depricate_ami_lambda.function_arn,
+            principal = "events.amazonaws.com"
+        )
+        # add_permission_to_lambda = tasks.CallAwsService(self, "Add EB permission to Lambda",
+        #     service = "lambda",
+        #     action = "addPermission",
+        #     parameters = {
+        #         "FunctionName" : depricate_ami_lambda.function_arn,
+        #         "StatementId" : "lambdaPermissionStatement4",
+        #         "Action" : "lambda:*",
+        #         "Principal" : "events.amazonaws.com",
+        #         "SourceArn" : sfn.JsonPath.string_at("$.EventRules.RuleArn")
+        #     },
+        #     iam_resources = ["*"],
+        #     additional_iam_statements=[
+        #         _iam.PolicyStatement(
+        #             actions=["lambda:AddPermission"],
+        #             resources=["*"]
+        #             )
+        #         ],        
+        #     result_path = sfn.JsonPath.string_at("$.LambdaPermission")
+        # )
+
+        # add target to EventBridge 
+        add_target_to_eb = tasks.CallAwsService(self, "Add EB Target to Lambda",
+            service="eventBridge",
+            action="putTargets",
+            parameters={
+                "Rule" : "ami_event_rule_TeamC",
+                "Targets" : [{
+                    "Id" : "eventBridgeLambda",
+                    "Arn" : depricate_ami_lambda.function_arn,
+                }]
+            },
+            iam_resources = ["*"],
+            additional_iam_statements=[
+                _iam.PolicyStatement(
+                    actions=["events:putTargets"],
+                    resources=["*"]
+                    )
+                ],        
+            result_path = sfn.JsonPath.string_at("$.EbTargets")
+        )
+
+        chain = sfn.Chain.start(create_image_task).next(create_eventbridge_rule_task).next(add_target_to_eb)
+        sm = sfn.StateMachine(self, "StateMachine",
+            definition = chain
+        )
+        
+        CfnOutput(self, "StepFunctionArn", description="Step function ARN",
+            value=sm.state_machine_arn       
+        )
+        
+        CfnOutput(self, "StpFunctionURL", description="Step Function URL",
+            value=Fn.sub("https://${AWS::Region}.console.aws.amazon.com/states/home?region=${AWS::Region}#/statemachines/view/${AMIStateMachine}",
+              {"AMIStateMachine": sm.state_machine_arn}
+            )       
+        )
