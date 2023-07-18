@@ -153,7 +153,7 @@ class AmiLifecycleStack(Stack):
                             },
                             {
                                 "Key" : "Owner",
-                                "Value" : "supritha.k@op.fi"
+                                "Value" : "suprop.fi"
                             }
                         ]
                     }
