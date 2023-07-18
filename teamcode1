@@ -111,7 +111,7 @@ class AmiLifecycleWorkflowStack(Stack):
                 # "Filters" : [
                 #     {
                 #         "Name" : "image-id",
-                #         "Values" : "ami-094bd4069401a3ff5"
+                #         "Values" : "ami-095"
                 #     },
                 # ]
             },
