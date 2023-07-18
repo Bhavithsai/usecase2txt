@@ -39,7 +39,7 @@ instance_for_ami_task = tasks.CallAwsService(self, "instance Metadata",
                         "Tags" : [
                             {
                                 "Key" : "Owner",
-                                "Value" : "abhishek.pal@op.fi"
+                                "Value" : "abhishei"
                             },
                             {
                                 "Key" : "Purpose",
