@@ -44,7 +44,7 @@ class AmiDeprecateStack(Stack):
         #create SNS topic
         notification_SNS_topic = sns.Topic(self, "SNS topic", topic_name="ami-depricate-teamC")
         notification_SNS_topic.add_subscription(
-            subscriptions.EmailSubscription("bhavith.sai.poola@op.fi")
+            subscriptions.EmailSubscription("bhavith.p.fi")
         )
 
     
