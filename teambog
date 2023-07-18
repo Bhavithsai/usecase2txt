@@ -94,8 +94,8 @@ class AmiLifecycleStack(Stack):
             "Name" : "amitestinfra",
             "InstanceProfileName": "Image-builder-test",
             "InstanceTypes" : ["t2.micro"],
-            "SubnetId" : "subnet-0f52fef29b82ad16a",
-            "SecurityGroupIds" : ["sg-0591f98b136627e5c"],
+            "SubnetId" : "subnet-0ff2",
+            "SecurityGroupIds" : ["sg-059c"],
             "TerminateInstanceOnFailure": False,
             "ClientToken" : "amitestinginfra12"
         },
@@ -141,7 +141,7 @@ class AmiLifecycleStack(Stack):
                 "MinCount": 1,
                 "InstanceType": "t2.micro",
                 "ImageId": sfn.JsonPath.string_at("$.DescribeImage.Images[0].ImageId"),
-                "SubnetId": "subnet-0f52fef29b82ad16a",
+                "SubnetId": "subnet-0ad16a",
                 "TagSpecifications" : [
                     {
                         "ResourceType" : "instance",
