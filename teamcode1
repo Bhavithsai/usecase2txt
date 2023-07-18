@@ -132,7 +132,7 @@ class AmiLifecycleWorkflowStack(Stack):
                     },
                     {
                         "Key" : "owner",
-                        "Value" : "abhishek.pal@op.fi"
+                        "Value" : "abhiop.fi"
                     },
                 ]
             },
