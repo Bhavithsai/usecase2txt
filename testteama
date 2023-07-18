@@ -13,7 +13,7 @@ from ec2isolation.ec2isolation_sf_stack import Ec2IsolationsfStack
 app = cdk.App()
 accountid = app.node.try_get_context("accountid")
 region = app.node.try_get_context("region")
-env_test = cdk.Environment(account="600032437742", region="eu-central-1")
+env_test = cdk.Environment(account="600", region="eu-cral-1")
 ec2_isolationsf_stack_test = Ec2IsolationsfStack(app, "IsolationsfStack", env=env_test)
 #vpc = ec2.Vpc.from_lookup(vpc,"test", vpc_name = app.node.try_get_context("vpcname"), vpc_id=app.node.try_get_context("vpcid"))
 ec2_isolationsf_stack_template = assertions.Template.from_stack(ec2_isolationsf_stack_test)
