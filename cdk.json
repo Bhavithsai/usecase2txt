@@ -15,12 +15,12 @@
     ]
   },
   "context": {
-    "accountid": "600032437742",
-    "region": "eu-central-1",
-    "imageid" : "ami-0122fd36a4f50873a",
-    "instance-type" : "t2.micro",
-    "subnet-id" : "subnet-0f52fef29b82ad16a",
-    "instance_id" : "i-02b86f002b6fc83aa",
+    "accountid": "",
+    "region": "",
+    "imageid" : "",
+    "instance-type" : "",
+    "subnet-id" : "subnet",
+    "instance_id" : "i-",
     "@aws-cdk/aws-lambda:recognizeLayerVersion": true,
     "@aws-cdk/core:checkSecretUsage": true,
     "@aws-cdk/core:target-partitions": [
