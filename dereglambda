@@ -63,11 +63,11 @@ def lambda_handler(event, context):
         #for x in email_address:
         #    owner_addr = x
         #    response = sns.subscribe(
-        #        TopicArn='arn:aws:sns:eu-central-1:600032437742:amitest_topic',
+        #        TopicArn='arn:aws:sns:eu-central-1:6000:amitest_topic',
         #        Protocol='email',
         #        Endpoint=owner_addr,
         #    )
         
         new_line = '\n'
         msg = f'The AMI used by following instances is Deregistered:{new_line} {new_line.join(list_instance_id)}'
-        sns.publish(TopicArn='arn:aws:sns:eu-central-1:600032437742:amitest_topic',Message=msg)
+        sns.publish(TopicArn='arn:aws:sns:eu-central-1:6:amitest_topic',Message=msg)
