@@ -88,7 +88,7 @@ class AmiLifecycleWorkflowStack(Stack):
                     },
                     {
                         "Key" : "owner",
-                        "Value" : "abhishek.pal@op.fi"
+                        "Value" : "abhishekfi"
                     },
                 ]
             },
@@ -102,7 +102,7 @@ class AmiLifecycleWorkflowStack(Stack):
             topic_name="ami-lifecycle-topic-TeamC"
         )
         AMI_SNS_topic.add_subscription(
-            subs.EmailSubscription("abhishek.pal@op.fi")
+            subs.EmailSubscription("abhis.fi")
         )
         #Lambda role
         lambda_role = _iam.Role(scope=self, id='cdk-lambda-role',
