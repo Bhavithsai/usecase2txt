@@ -39,7 +39,7 @@ def ami_handler(event, context):
     #Last launch date of AMI
     last_launch_ami_time = ec2_client.describe_image_attribute(
         Attribute = 'lastLaunchedTime',
-        ImageId = 'ami-0122fd36a4f50873a'
+        ImageId = 'ami-012'
         )
     print(last_launch_ami_time)
     #create_sns("AMI_notification_TeamC") 
