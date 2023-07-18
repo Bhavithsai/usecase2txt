@@ -50,13 +50,13 @@ Bhavith Poola
 
 call me once
 
-  image_id ami-007b5537c4cf6e129 topic_arn ... by Abhishek Pal
+  image_id ami-007b topic_arn ... by Abhishek Pal
 Abhishek Pal17:29
 
  
 
-image_id	ami-007b5537c4cf6e129
-topic_arn	arn:aws:sns:eu-central-1:600032437742:ami-lifecycle-topic-TeamC
+image_id	ami-007
+topic_arn	arn:aws:sns:eu-central-1:60:ami-lifecycle-topic-TeamC
 
  
 
@@ -78,8 +78,8 @@ Abhishek Pal17:38
 Function Logs
 Loading function
 START RequestId: 8cbd1a2c-348e-4fed-9cd2-54c187c74625 Version: $LATEST
-Image ID: ami-007b5537c4cf6e129 and SNS topic: arn:aws:sns:eu-central-1:600032437742:ami-lifecycle-topic-TeamC
-{'ImageId': 'ami-007b5537c4cf6e129', 'LastLaunchedTime': {'Value': '2023-06-16T04:49:34Z'}, 'ResponseMetadata': {'RequestId': 'c72386fd-8528-44ae-b057-834089d45095', 'HTTPStatusCode': 200, 'HTTPHeaders': {'x-amzn-requestid': 'c72386fd-8528-44ae-b057-834089d45095', 'cache-control': 'no-cache, no-store', 'strict-transport-security': 'max-age=31536000; includeSubDomains', 'content-type': 'text/xml;charset=UTF-8', 'content-length': '355', 'date': 'Mon, 19 Jun 2023 12:06:57 GMT', 'server': 'AmazonEC2'}, 'RetryAttempts': 0}}
+Image ID: ami-007b9 and SNS topic: arn:aws:sns:eu-central-1:60003:ami-lifecycle-topic-TeamC
+{'ImageId': 'ami-0129', 'LastLaunchedTime': {'Value': '2023-06-16T04:49:34Z'}, 'ResponseMetadata': {'RequestId': 'c72386fd-8528-44ae-b057-834089d45095', 'HTTPStatusCode': 200, 'HTTPHeaders': {'x-amzn-requestid': 'c72386fd-8528-44ae-b057-834089d45095', 'cache-control': 'no-cache, no-store', 'strict-transport-security': 'max-age=31536000; includeSubDomains', 'content-type': 'text/xml;charset=UTF-8', 'content-length': '355', 'date': 'Mon, 19 Jun 2023 12:06:57 GMT', 'server': 'AmazonEC2'}, 'RetryAttempts': 0}}
 <class 'dict'>
 2023-06-16T04:49:34Z
 [ERROR] ValueError: time data '2023-06-16T04:49:34Z' does not match format '%Y-%m-%dT%H:%M:%S.%fZ'
