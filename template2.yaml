@@ -1,0 +1,103 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: CloudFormation Template for Lambda Deployment with VPC, IAM Role, Security Group
+
+Parameters:
+  VPCId:
+    Type: String
+    Default: vpc-03941e18a3dde38d2
+    Description: The VPC ID where resources will be deployed.
+
+  PublicSubnet:
+    Type: AWS::EC2::Subnet::Id
+    Description: The public subnet ID for public resources.
+
+  PrivateSubnet:
+    Type: AWS::EC2::Subnet::Id
+    Description: The private subnet ID for the lambda function.
+    Default: subnet-0370e4a97c3cc02a8
+
+  BastionHostSecurityGroup:
+    Type: AWS::EC2::SecurityGroup::Id
+    Description: The security group ID of the Bastion host.
+
+  EC2InstanceSecurityGroup:
+    Type: AWS::EC2::SecurityGroup::Id
+    Description: The security group ID of the existing EC2 instance.
+
+Resources:
+
+  # IAM Role for Lambda
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties: 
+      AssumeRolePolicyDocument: 
+        Version: "2012-10-17"
+        Statement: 
+          - Effect: "Allow"
+            Principal: 
+              Service: 
+                - "lambda.amazonaws.com"
+            Action: 
+              - "sts:AssumeRole"
+      Policies: 
+        - PolicyName: "LambdaAccessPolicy"
+          PolicyDocument: 
+            Version: "2012-10-17"
+            Statement: 
+              - Effect: "Allow"
+                Action: 
+                  - "s3:*"
+                Resource: 
+                  - "*"
+              - Effect: "Allow"
+                Action: 
+                  - "dynamodb:*"
+                Resource: 
+                  - "*"
+
+  # Security Group for Lambda
+  LambdaSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Enable inbound traffic from Bastion host
+      VpcId: !Ref VPCId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          SourceSecurityGroupId: !Ref BastionHostSecurityGroup
+
+  # Lambda Function
+  MyLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties: 
+      FunctionName: MyVPCBasedLambda
+      Handler: index.handler
+      Role: 
+        Fn::GetAtt: 
+          - LambdaExecutionRole
+          - Arn
+      Code:
+        ZipFile: |
+          def handler(event, context):
+              return "Hello from Lambda in VPC!"
+      Runtime: python3.9
+      VpcConfig: 
+        SubnetIds: 
+          - !Ref PrivateSubnet
+        SecurityGroupIds: 
+          - !Ref LambdaSecurityGroup
+          - !Ref EC2InstanceSecurityGroup
+
+Outputs:
+  LambdaFunctionName:
+    Description: The name of the created Lambda function
+    Value: !GetAtt MyLambdaFunction.Arn
+
+  LambdaSecurityGroupId:
+    Description: Security Group ID of the Lambda function
+    Value: !Ref LambdaSecurityGroup
+
+  LambdaRoleArn:
+    Description: ARN of the Lambda execution role
+    Value: !GetAtt LambdaExecutionRole.Arn
