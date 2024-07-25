@@ -1,0 +1,14 @@
+Spinning up a Lambda function along with required Network components	
+"1. Use existing VPC
+2. Use existing subnets (public & private) attached with the default VPC
+3. Create an IAM role (with permissions to access S3 & Dynamo DB)
+4. Create a new Security Group having inbound traffic from Bastion host
+5. Create a lambda function and place it within the private/application subnet ""subnet-0370e4a97c3cc02a8"".
+6. Attach the IAM role to the lambda function
+7. Attach the SG of EC2 instance with the Lambda function"	
+"1. Use VPC ""vpc-03941e18a3dde38d2""
+2. IAM role with least privileges (only allowed for S3 & Dynamo DB).
+3. Lambda function CPU utilization should be minimal (256), with runtime as python version 3.9
+4. Timeout should be 5 mins (maximum)
+
+*Region eu-central-1 (Frankfurt)"
