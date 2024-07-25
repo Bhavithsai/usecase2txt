@@ -12,3 +12,7 @@ Spinning up a Lambda function along with required Network components
 4. Timeout should be 5 mins (maximum)
 
 *Region eu-central-1 (Frankfurt)"
+
+
+IAM Role Policy Update:
+ec2:CreateNetworkInterface, ec2:DescribeNetworkInterfaces, and ec2:DeleteNetworkInterface: These permissions are added to allow the Lambda function to create and manage network interfaces within the VPC.
