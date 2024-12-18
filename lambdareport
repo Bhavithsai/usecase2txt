@@ -1,0 +1,95 @@
+import boto3
+import pandas as pd
+from io import StringIO
+import os
+import json
+
+def lambda_handler(event, context):
+    # S3 bucket details
+    input_bucket = "op-cloudcustodian-reports"
+    output_bucket = "op-patching-reports"
+    output_key = "csv/instance-patching-report.csv"  # Output file name
+    
+    # File names in the input S3 bucket
+    ec2_report_key = "csv/ec2-all/ec2-all.csv"
+    ami_report_key = "csv/all-amis/all-amis.csv"
+    account_bucket = "op-general-reports"
+    account_report_key = "csv/aws-account-data/latest/aws-account-data-report.csv"
+    
+    # Initialize S3 client
+    s3_client = boto3.client('s3')
+    
+    try:
+        # Load EC2 report
+        ec2_response = s3_client.get_object(Bucket=input_bucket, Key=ec2_report_key)
+        ec2_report = pd.read_csv(StringIO(ec2_response['Body'].read().decode('utf-8')))
+        
+        # Load AMI report
+        ami_response = s3_client.get_object(Bucket=input_bucket, Key=ami_report_key)
+        ami_report = pd.read_csv(StringIO(ami_response['Body'].read().decode('utf-8')))
+        
+        # Load Account report
+        account_response = s3_client.get_object(Bucket=account_bucket, Key=account_report_key)
+        account_report = pd.read_csv(StringIO(account_response['Body'].read().decode('utf-8')), dtype={'AccountID': str})
+        
+        # Standardize column names
+        ec2_report.rename(columns={'Account': 'AccountName'}, inplace=True)
+        
+        # Normalize AccountName for consistent matching
+        account_report['AccountName'] = account_report['AccountName'].str.strip().str.lower()
+        ec2_report['AccountName'] = ec2_report['AccountName'].str.strip().str.lower()
+        
+        #Convert AccountID to string to preserve leading zeros
+        account_report['AccountID'] = account_report['AccountID'].astype(str)
+        
+        # Extract relevant fields
+        ec2_fields = ec2_report[['AccountName', 'InstanceId', 'ImageId','LaunchTime']]
+        ami_fields = ami_report[['ImageId', 'CreationDate', 'Name']]
+        account_fields = account_report[['AccountID', 'AccountName', 'Tribe', 'InvoicingContact', 'Owner', 'TechnicalContact']]
+        
+        # Match EC2 report with AMI report
+        ec2_ami_combined = ec2_fields.merge(
+            ami_fields,
+            on='ImageId',
+            how='left'
+        )
+        
+        # Match the combined report with the Account report
+        final_combined = ec2_ami_combined.merge(
+            account_fields,
+            on='AccountName',  # Match AccountName from both EC2 and Account reports
+            how='left'
+        )
+        
+        # Drop redundant columns
+      #  final_combined.drop(columns=['ImageId'], inplace=True)
+        
+        # Select required columns
+        final_combined = final_combined[['AccountName', 'AccountID', 'InstanceId','LaunchTime', 'ImageId', 'CreationDate', 'Tribe', 'Owner', 'InvoicingContact', 'TechnicalContact']]
+        
+        # Handle missing values
+        final_combined.fillna('N/A', inplace=True)
+        
+        # Save the final combined report to a CSV in memory
+        csv_buffer = StringIO()
+        final_combined.to_csv(csv_buffer, index=False)
+        
+        # Upload the CSV to the output S3 bucket
+        s3_client.put_object(
+            Bucket=output_bucket,
+            Key=output_key,
+            Body=csv_buffer.getvalue()
+        )
+        
+        print(f"Final combined report saved to {output_bucket}/{output_key}")
+        return {
+            "statusCode": 200,
+            "body": f"Report successfully saved to {output_bucket}/{output_key}"
+        }
+        
+    except Exception as e:
+        print(f"Error: {e}")
+        return {
+            "statusCode": 500,
+            "body": f"Error: {e}"
+        }
