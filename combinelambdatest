@@ -1,0 +1,72 @@
+import unittest
+from unittest.mock import patch, MagicMock
+import boto3
+from botocore.exceptions import ClientError
+import pandas as pd
+from io import StringIO
+from your_lambda_file import lambda_handler  # Replace 'your_lambda_file' with the actual file name
+
+class TestLambdaHandler(unittest.TestCase):
+
+    @patch("boto3.client")
+    def test_lambda_handler_success(self, mock_boto_client):
+        # Mock S3 client
+        mock_s3 = MagicMock()
+        mock_boto_client.return_value = mock_s3
+
+        # Mock input data for EC2, AMI, and Account reports
+        ec2_csv = """AccountName,InstanceId,ImageId,LaunchTime\naccount-a,i-12345,img-abc,2023-01-01T00:00:00Z"""
+        ami_csv = """ImageId,CreationDate,Name\nimg-abc,2023-01-01T00:00:00Z,ami-name"""
+        account_csv = """AccountID,AccountName,Tribe,InvoicingContact,Owner,TechnicalContact\n123456789012,account-a,tribe-a,contact-a,owner-a,tech-a"""
+
+        # Mock responses for S3 get_object
+        mock_s3.get_object.side_effect = [
+            {"Body": StringIO(ec2_csv)},
+            {"Body": StringIO(ami_csv)},
+            {"Body": StringIO(account_csv)},
+        ]
+
+        # Mock put_object to confirm it gets called
+        mock_s3.put_object.return_value = {}
+
+        # Define test event and context
+        event = {}
+        context = {}
+
+        # Call the Lambda function
+        response = lambda_handler(event, context)
+
+        # Assertions
+        self.assertEqual(response["statusCode"], 200)
+        mock_s3.get_object.assert_any_call(Bucket="op-cloudcustodian-reports", Key="csv/ec2-all/ec2-all.csv")
+        mock_s3.get_object.assert_any_call(Bucket="op-cloudcustodian-reports", Key="csv/all-amis/all-amis.csv")
+        mock_s3.get_object.assert_any_call(Bucket="op-general-reports", Key="csv/aws-account-data/latest/aws-account-data-report.csv")
+        mock_s3.put_object.assert_called_once()
+
+        # Verify the uploaded file content
+        uploaded_csv = mock_s3.put_object.call_args[1]["Body"]
+        expected_csv = """AccountName,AccountID,InstanceId,LaunchTime,ImageId,CreationDate,Tribe,Owner,InvoicingContact,TechnicalContact\naccount-a,123456789012,i-12345,2023-01-01T00:00:00Z,img-abc,2023-01-01T00:00:00Z,tribe-a,owner-a,contact-a,tech-a\n"""
+        self.assertEqual(uploaded_csv, expected_csv)
+
+    @patch("boto3.client")
+    def test_lambda_handler_failure(self, mock_boto_client):
+        # Mock S3 client
+        mock_s3 = MagicMock()
+        mock_boto_client.return_value = mock_s3
+
+        # Simulate an S3 exception
+        mock_s3.get_object.side_effect = ClientError({"Error": {"Code": "NoSuchKey"}}, "GetObject")
+
+        # Define test event and context
+        event = {}
+        context = {}
+
+        # Call the Lambda function
+        response = lambda_handler(event, context)
+
+        # Assertions
+        self.assertEqual(response["statusCode"], 500)
+        self.assertIn("Error", response["body"])
+
+if __name__ == "__main__":
+    unittest.main()
