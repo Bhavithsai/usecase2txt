@@ -1,0 +1,76 @@
+import pytest
+from unittest.mock import patch, MagicMock
+from op.patching.report.main import lambda_handler
+from io import StringIO
+
+@pytest.fixture
+def mock_s3_client():
+    # Mocking S3 client and its get_object/put_object behavior
+    with patch("boto3.client") as mock_client:
+        s3_client = MagicMock()
+        mock_client.return_value = s3_client
+
+        # Mocked responses for S3 get_object
+        s3_client.get_object.side_effect = [
+            # EC2 report
+            {
+                "Body": StringIO(
+                    "Account,InstanceId,ImageId,LaunchTime\n"
+                    "test_account,i-123456,ami-123456,2024-01-01T00:00:00Z\n"
+                )
+            },
+            # AMI report
+            {
+                "Body": StringIO(
+                    "ImageId,CreationDate,Name\n"
+                    "ami-123456,2023-12-31T00:00:00Z,TestAMI\n"
+                )
+            },
+            # Account report
+            {
+                "Body": StringIO(
+                    "AccountID,AccountName,Tribe,InvoicingContact,Owner,TechnicalContact\n"
+                    "123456,test_account,TestTribe,invoice@test.com,owner@test.com,tech@test.com\n"
+                )
+            },
+        ]
+
+        yield s3_client
+
+def test_lambda_handler_success(mock_s3_client):
+    # Mock event and context for the Lambda handler
+    event = {}
+    context = {}
+
+    # Call the Lambda handler
+    response = lambda_handler(event, context)
+
+    # Assertions
+    assert response["statusCode"] == 200
+    assert "Report successfully saved" in response["body"]
+
+    # Verify put_object is called to save the CSV
+    mock_s3_client.put_object.assert_called_once()
+    args, kwargs = mock_s3_client.put_object.call_args
+    assert kwargs["Bucket"] == "op-patching-reports"
+    assert kwargs["Key"] == "csv/instance-patching-report.csv"
+
+    # Verify contents of the uploaded CSV
+    uploaded_csv = kwargs["Body"]
+    assert "AccountName,AccountID,InstanceId,LaunchTime,ImageId,CreationDate,Tribe,Owner,InvoicingContact,TechnicalContact" in uploaded_csv
+    assert "test_account,123456,i-123456,2024-01-01T00:00:00Z,ami-123456,2023-12-31T00:00:00Z,TestTribe,owner@test.com,invoice@test.com,tech@test.com" in uploaded_csv
+
+def test_lambda_handler_failure(mock_s3_client):
+    # Mock an exception when calling get_object
+    mock_s3_client.get_object.side_effect = Exception("S3 error")
+
+    # Mock event and context for the Lambda handler
+    event = {}
+    context = {}
+
+    # Call the Lambda handler
+    response = lambda_handler(event, context)
+
+    # Assertions
+    assert response["statusCode"] == 500
+    assert "Error: S3 error" in response["body"]
