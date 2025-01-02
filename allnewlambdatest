@@ -1,8 +1,6 @@
-import pytest
+mport pytest
 from unittest import mock
-import boto3
-import pandas as pd
-from io import StringIO
+from io import BytesIO
 from lambda_function import process_reports
 
 @pytest.fixture
@@ -10,10 +8,21 @@ def mock_s3_client():
     with mock.patch('boto3.client') as mock_client:
         yield mock_client
 
+def mock_get_object(Bucket, Key):
+    if Key == 'csv/ec2-all/ec2-all.csv':
+        ec2_data = "Account,InstanceId,ImageId,LaunchTime\naccount1,i-1234567890,ami-12345,2021-01-01"
+        return {'Body': BytesIO(ec2_data.encode('utf-8'))}
+    elif Key == 'csv/all-amis/all-amis.csv':
+        ami_data = "ImageId,CreationDate,Name\nami-12345,2021-01-01,MyAMI"
+        return {'Body': BytesIO(ami_data.encode('utf-8'))}
+    elif Key == 'csv/aws-account-data/latest/aws-account-data-report.csv':
+        account_data = "AccountID,AccountName,Tribe,InvoicingContact,Owner,TechnicalContact\n123456789012,account1,Tribe1,contact1,owner1,tech1"
+        return {'Body': BytesIO(account_data.encode('utf-8'))}
+
 def test_process_reports(mock_s3_client):
     # Mock the S3 client and responses
     mock_s3 = mock_s3_client.return_value
-    mock_s3.get_object = mock.MagicMock(side_effect=mock_get_object)
+    mock_s3.get_object.side_effect = mock_get_object
 
     # Test process_reports function
     input_bucket = "op-cloudcustodian-reports"
@@ -28,15 +37,4 @@ def test_process_reports(mock_s3_client):
     assert result is not None
     assert 'AccountName' in result
     assert 'InstanceId' in result
-
-def mock_get_object(Bucket, Key):
-    if Key == 'csv/ec2-all/ec2-all.csv':
-        ec2_data = "Account,InstanceId,ImageId,LaunchTime\naccount1,i-1234567890,ami-12345,2021-01-01"
-        return {'Body': StringIO(ec2_data)}
-    elif Key == 'csv/all-amis/all-amis.csv':
-        ami_data = "ImageId,CreationDate,Name\nami-12345,2021-01-01,MyAMI"
-        return {'Body': StringIO(ami_data)}
-    elif Key == 'csv/aws-account-data/latest/aws-account-data-report.csv':
-        account_data = "AccountID,AccountName,Tribe,InvoicingContact,Owner,TechnicalContact\n123456789012,account1,Tribe1,contact1,owner1,tech1"
-        return {'Body': StringIO(account_data)}
-
+    assert 'Tribe1' in result
