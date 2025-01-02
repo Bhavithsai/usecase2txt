@@ -1,8 +1,6 @@
 import boto3
 import pandas as pd
 from io import StringIO
-import os
-import json
 
 def process_reports(s3_client, input_bucket, output_bucket, ec2_report_key, ami_report_key, account_report_key):
     # Load EC2 report
@@ -14,7 +12,7 @@ def process_reports(s3_client, input_bucket, output_bucket, ec2_report_key, ami_
     ami_report = pd.read_csv(StringIO(ami_response['Body'].read().decode('utf-8')))
     
     # Load Account report
-    account_response = s3_client.get_object(Bucket=account_report_key, Key=account_report_key)
+    account_response = s3_client.get_object(Bucket=input_bucket, Key=account_report_key)
     account_report = pd.read_csv(StringIO(account_response['Body'].read().decode('utf-8')), dtype={'AccountID': str})
     
     # Standardize column names
@@ -52,7 +50,7 @@ def process_reports(s3_client, input_bucket, output_bucket, ec2_report_key, ami_
     s3_client.put_object(Bucket=output_bucket, Key='csv/instance-patching-report.csv', Body=csv_buffer.getvalue())
     
     return csv_buffer.getvalue()
-    
+
 def lambda_handler(event, context):
     input_bucket = "op-cloudcustodian-reports"
     output_bucket = "op-patching-reports"
@@ -63,7 +61,7 @@ def lambda_handler(event, context):
     s3_client = boto3.client('s3')
     
     try:
-        csv_content = process_reports(s3_client, input_bucket, output_bucket, ec2_report_key, ami_report_key, account_report_key)
+        process_reports(s3_client, input_bucket, output_bucket, ec2_report_key, ami_report_key, account_report_key)
         return {
             "statusCode": 200,
             "body": "Report successfully saved to S3"
