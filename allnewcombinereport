@@ -2,7 +2,7 @@ import boto3
 import pandas as pd
 from io import StringIO
 
-def process_reports(s3_client, input_bucket, output_bucket, ec2_report_key, ami_report_key, account_report_key):
+def process_reports(s3_client, input_bucket, output_bucket,output_key, ec2_report_key, ami_report_key,account_bucket,account_report_key):
     # Load EC2 report
     ec2_response = s3_client.get_object(Bucket=input_bucket, Key=ec2_report_key)
     ec2_report = pd.read_csv(StringIO(ec2_response['Body'].read().decode('utf-8')))
@@ -12,7 +12,7 @@ def process_reports(s3_client, input_bucket, output_bucket, ec2_report_key, ami_
     ami_report = pd.read_csv(StringIO(ami_response['Body'].read().decode('utf-8')))
     
     # Load Account report
-    account_response = s3_client.get_object(Bucket=input_bucket, Key=account_report_key)
+    account_response = s3_client.get_object(Bucket=account_bucket, Key=account_report_key)
     account_report = pd.read_csv(StringIO(account_response['Body'].read().decode('utf-8')), dtype={'AccountID': str})
     
     # Standardize column names
@@ -47,24 +47,26 @@ def process_reports(s3_client, input_bucket, output_bucket, ec2_report_key, ami_
     final_combined.to_csv(csv_buffer, index=False)
     
     # Upload the CSV to the output S3 bucket
-    s3_client.put_object(Bucket=output_bucket, Key='csv/instance-patching-report.csv', Body=csv_buffer.getvalue())
+    s3_client.put_object(Bucket=output_bucket, Key=output_key, Body=csv_buffer.getvalue())
     
     return csv_buffer.getvalue()
 
 def lambda_handler(event, context):
     input_bucket = "op-cloudcustodian-reports"
     output_bucket = "op-patching-reports"
+    output_key = "csv/instance-patching-report.csv"
     ec2_report_key = "csv/ec2-all/ec2-all.csv"
     ami_report_key = "csv/all-amis/all-amis.csv"
+    account_bucket = "op-general-reports"
     account_report_key = "csv/aws-account-data/latest/aws-account-data-report.csv"
     
     s3_client = boto3.client('s3')
     
     try:
-        process_reports(s3_client, input_bucket, output_bucket, ec2_report_key, ami_report_key, account_report_key)
+        process_reports(s3_client, input_bucket, output_bucket,output_key, ec2_report_key, ami_report_key,account_bucket, account_report_key)
         return {
             "statusCode": 200,
-            "body": "Report successfully saved to S3"
+            "body": f"Report successfully saved to {output_bucket}/{output_key}"
         }
     except Exception as e:
         return {
