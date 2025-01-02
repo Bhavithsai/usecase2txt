@@ -1,0 +1,31 @@
+============================================= test session starts ======================================================
+platform win32 -- Python 3.10.12, pytest-8.3.4, pluggy-1.5.0
+rootdir: C:\Users\B730369\aws-reports
+configfile: pytest.ini
+collected 2 items
+
+patching_report_test.py F.                                                                                                 [100%]
+
+=========================================================== FAILURES ============================================================ 
+__________________________________________________ test_lambda_handler_success __________________________________________________ 
+
+mock_s3_client = <MagicMock name='client()' id='2620529122544'>
+
+    def test_lambda_handler_success(mock_s3_client):
+        # Mock event and context for the Lambda handler
+        event = {}
+        context = {}
+
+        # Call the Lambda handler
+        response = lambda_handler(event, context)
+
+        # Assertions
+        assert response["statusCode"] == 500
+>       assert "Report successfully saved" in response["body"]
+E       assert 'Report successfully saved' in "Error: 'str' object has no attribute 'decode'"
+
+patching_report_test.py:53: AssertionError
+----------------------------------------------------- Captured stdout call ------------------------------------------------------ 
+Error: 'str' object has no attribute 'decode'
+==================================================== short test summary info ==================================================== 
+FAILED patching_report_test.py::test_lambda_handler_success - assert 'Report successfully saved' in "Error: 'str' object has no attribute 'decode'"
