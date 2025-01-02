@@ -1,0 +1,39 @@
+
+
+FAILED (failures=1)
+PS C:\Users\B730369\aws-reports\lib\lambda\test> python -m unittest patching_report_test.py
+Error: An error occurred (NoSuchBucket) when calling the GetObject operation: The specified bucket does not exist
+E
+======================================================================
+ERROR: test_lambda_handler (patching_report_test.TestLambdaHandler)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Python310\lib\site-packages\moto\core\models.py", line 122, in wrapper
+    result = func(*args, **kwargs)
+  File "C:\Users\B730369\aws-reports\lib\lambda\test\patching_report_test.py", line 49, in test_lambda_handler
+    response = self.s3.get_object(Bucket="op-patching-reports", Key="csv/instance-patching-report.csv")
+  File "C:\Users\B730369\AppData\Roaming\Python\Python310\site-packages\botocore\client.py", line 569, in _api_call
+    return self._make_api_call(operation_name, kwargs)
+  File "C:\Users\B730369\AppData\Roaming\Python\Python310\site-packages\botocore\client.py", line 1023, in _make_api_call
+    raise error_class(parsed_response, operation_name)
+botocore.errorfactory.NoSuchBucket: An error occurred (NoSuchBucket) when calling the GetObject operation: The specified bucket does not exist
+
+----------------------------------------------------------------------
+Ran 1 test in 0.505s
+
+FAILED (errors=1)
+PS C:\Users\B730369\aws-reports\lib\lambda\test> python -m unittest patching_report_test.py
+E
+======================================================================
+ERROR: test_lambda_handler (patching_report_test.TestLambdaHandler)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Python310\lib\site-packages\moto\core\models.py", line 122, in wrapper
+    result = func(*args, **kwargs)
+  File "C:\Users\B730369\aws-reports\lib\lambda\test\patching_report_test.py", line 20, in setUp
+    self.s3.create_bucket(Bucket="op-cloudcustodian-reports")
+  File "C:\Users\B730369\AppData\Roaming\Python\Python310\site-packages\botocore\client.py", line 569, in _api_call
+    return self._make_api_call(operation_name, kwargs)
+  File "C:\Users\B730369\AppData\Roaming\Python\Python310\site-packages\botocore\client.py", line 1023, in _make_api_call
+    raise error_class(parsed_response, operation_name)
+botocore.exceptions.ClientError: An error occurred (IllegalLocationConstraintException) when calling the CreateBucket operation: The unspecified location constraint is incompatible for the region specific endpoint this request was sent to.
