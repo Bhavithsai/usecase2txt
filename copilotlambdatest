@@ -1,0 +1,56 @@
+import unittest
+from unittest.mock import patch, Mock
+import boto3
+from moto import mock_s3
+from lambda_function import lambda_handler
+import pandas as pd
+from io import StringIO
+import json
+
+class TestLambdaHandler(unittest.TestCase):
+
+    @mock_s3
+    def setUp(self):
+        self.s3 = boto3.client('s3', region_name='us-east-1')
+        
+        # Create mock buckets
+        self.s3.create_bucket(Bucket="op-cloudcustodian-reports")
+        self.s3.create_bucket(Bucket="op-patching-reports")
+        self.s3.create_bucket(Bucket="op-general-reports")
+        
+        # Upload mock data to S3
+        ec2_data = "Account,InstanceId,ImageId,LaunchTime\n" \
+                   "test-account,i-12345678,ami-12345678,2021-01-01T00:00:00Z\n"
+        ami_data = "ImageId,CreationDate,Name\n" \
+                   "ami-12345678,2020-01-01T00:00:00Z,test-ami\n"
+        account_data = "AccountID,AccountName,Tribe,InvoicingContact,Owner,TechnicalContact\n" \
+                       "123456789012,test-account,Tribe1,contact1,owner1,tech_contact1\n"
+
+        self.s3.put_object(Bucket="op-cloudcustodian-reports", Key="csv/ec2-all/ec2-all.csv", Body=ec2_data)
+        self.s3.put_object(Bucket="op-cloudcustodian-reports", Key="csv/all-amis/all-amis.csv", Body=ami_data)
+        self.s3.put_object(Bucket="op-general-reports", Key="csv/aws-account-data/latest/aws-account-data-report.csv", Body=account_data)
+
+    @mock_s3
+    def test_lambda_handler(self):
+        # Mock event and context
+        event = {}
+        context = {}
+        
+        # Call the lambda handler function
+        response = lambda_handler(event, context)
+        
+        # Check the response
+        self.assertEqual(response["statusCode"], 200)
+        
+        # Check if the output file exists in the output bucket
+        response = self.s3.get_object(Bucket="op-patching-reports", Key="csv/instance-patching-report.csv")
+        output_df = pd.read_csv(StringIO(response['Body'].read().decode('utf-8')))
+        
+        # Check the contents of the output file
+        expected_columns = ['AccountName', 'AccountID', 'InstanceId', 'LaunchTime', 'ImageId', 'CreationDate', 'Tribe', 'Owner', 'InvoicingContact', 'TechnicalContact']
+        self.assertEqual(list(output_df.columns), expected_columns)
+        self.assertEqual(len(output_df), 1)
+        self.assertEqual(output_df.iloc[0]['AccountName'], 'test-account')
+
+if __name__ == '__main__':
+    unittest.main()
