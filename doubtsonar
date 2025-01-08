@@ -4,5 +4,12 @@ This line in pytest.ini can help with coverage and test report
 May be try to understand what they mean, I will leave it you to understand from documentation for pytest
  
 -Dsonar.python.coverage.reportPaths=coverage-reports/coverage.xml
+
 Then add this to sonar.sh so it can pick the coverage generated above for python
- 
+
+
+ C:\Users\B730369\aws-reports> python -m pytest
+ERROR: usage: __main__.py [options] [file_or_dir] [file_or_dir] [...]
+__main__.py: error: unrecognized arguments: --cov=lib --cov-report --cov-report=xml:coverage-reports/coverage.xml
+  inifile: C:\Users\B730369\aws-reports\pytest.ini
+  rootdir: C:\Users\B730369\aws-reports
