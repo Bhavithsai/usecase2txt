@@ -13,3 +13,9 @@ ERROR: usage: __main__.py [options] [file_or_dir] [file_or_dir] [...]
 __main__.py: error: unrecognized arguments: --cov=lib --cov-report --cov-report=xml:coverage-reports/coverage.xml
   inifile: C:\Users\B730369\aws-reports\pytest.ini
   rootdir: C:\Users\B730369\aws-reports
+
+reports: {
+          TestReports: { files: ['test-reports/junit.xml'], fileFormat: op_codepipeline.TestReportFormat.JUNITXML },
+          CoverageReports: { files: ['coverage/clover.xml'], fileFormat: op_codepipeline.CoverageFormat.CLOVERXML }
+        },
+        cachePaths: ['/root/.npm/**/*']
