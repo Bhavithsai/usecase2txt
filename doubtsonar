@@ -1,0 +1,8 @@
+addopts = --junitxml=reports/test-report.xml --cov=stacksets --cov-report=xml:coverage-reports/coverage.xml
+This line in pytest.ini can help with coverage and test report
+ 
+May be try to understand what they mean, I will leave it you to understand from documentation for pytest
+ 
+-Dsonar.python.coverage.reportPaths=coverage-reports/coverage.xml
+Then add this to sonar.sh so it can pick the coverage generated above for python
+ 
