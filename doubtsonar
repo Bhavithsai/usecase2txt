@@ -19,3 +19,9 @@ reports: {
           CoverageReports: { files: ['coverage/clover.xml'], fileFormat: op_codepipeline.CoverageFormat.CLOVERXML }
         },
         cachePaths: ['/root/.npm/**/*']
+
+[pytest]
+pythonpath = . scripts
+testpaths = scripts/tests,lib/lambda/test
+addopts = --cov=lib/lambda/test --cov-report=xml:coverage/coverage.xml
+
