@@ -1,0 +1,97 @@
+import pytest
+from unittest.mock import MagicMock
+import pandas as pd
+from io import StringIO
+from your_lambda_module import lambda_handler, process_reports  # Replace with actual import
+
+# Mock the input reports as CSVs in StringIO
+EC2_CSV = """AccountName,InstanceId,ImageId,LaunchTime
+account1,i-123456,ami-123456,2023-01-01T12:00:00
+account2,i-789012,ami-789012,2023-02-01T12:00:00
+"""
+AMI_CSV = """ImageId,CreationDate,Name
+ami-123456,2023-01-01T12:00:00,ami-name-1
+ami-789012,2023-02-01T12:00:00,ami-name-2
+"""
+ACCOUNT_CSV = """AccountID,AccountName,Tribe,InvoicingContact,Owner,TechnicalContact
+123456,account1,tribe1,contact1,owner1,techcontact1
+789012,account2,tribe2,contact2,owner2,techcontact2
+"""
+
+@pytest.fixture
+def s3_client():
+    # Mock the S3 client
+    mock_client = MagicMock()
+    mock_client.get_object.return_value = {
+        'Body': MagicMock(read=MagicMock(return_value=EC2_CSV.encode('utf-8')))
+    }
+    return mock_client
+
+
+def test_process_reports(s3_client):
+    # Test the processing of reports
+    s3_client.get_object.return_value = {
+        'Body': MagicMock(read=MagicMock(return_value=EC2_CSV.encode('utf-8')))
+    }
+    
+    s3_client.get_object.return_value = {
+        'Body': MagicMock(read=MagicMock(return_value=AMI_CSV.encode('utf-8')))
+    }
+    
+    s3_client.get_object.return_value = {
+        'Body': MagicMock(read=MagicMock(return_value=ACCOUNT_CSV.encode('utf-8')))
+    }
+
+    output = process_reports(
+        s3_client,
+        'input-bucket',
+        'output-bucket',
+        'output-key.csv',
+        'ec2-report.csv',
+        'ami-report.csv',
+        'account-bucket',
+        'account-report.csv'
+    )
+    
+    assert "AccountName" in output
+    assert "InstanceId" in output
+    assert "AccountID" in output
+    assert "Tribe" in output
+    assert "InvoicingContact" in output
+
+
+def test_lambda_handler_success(s3_client):
+    s3_client.get_object.return_value = {
+        'Body': MagicMock(read=MagicMock(return_value=EC2_CSV.encode('utf-8')))
+    }
+    
+    s3_client.get_object.return_value = {
+        'Body': MagicMock(read=MagicMock(return_value=AMI_CSV.encode('utf-8')))
+    }
+    
+    s3_client.get_object.return_value = {
+        'Body': MagicMock(read=MagicMock(return_value=ACCOUNT_CSV.encode('utf-8')))
+    }
+
+    s3_client.put_object.return_value = {}  # Mock successful upload
+    
+    event = {}
+    context = {}
+    
+    response = lambda_handler(event, context)
+    
+    assert response['statusCode'] == 200
+    assert "Report successfully saved" in response['body']
+
+
+def test_lambda_handler_failure(s3_client):
+    s3_client.get_object.side_effect = Exception("S3 read error")
+    
+    event = {}
+    context = {}
+    
+    response = lambda_handler(event, context)
+    
+    assert response['statusCode'] == 500
+    assert "Error" in response['body']
+    assert "S3 read error" in response['body']
