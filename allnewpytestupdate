@@ -1,0 +1,137 @@
+import pytest
+from unittest import mock
+import boto3
+from io import BytesIO
+from lib.pythonlambda.op_patching_report.main import lambda_handler, process_reports
+
+# Mock S3 client
+@pytest.fixture
+def mock_s3_client():
+    """Provide a mocked S3 client for testing."""
+    with mock.patch('boto3.client') as mock_client:
+        yield mock_client
+
+def mock_get_object_success(Bucket, Key):
+    """Simulate successful S3 responses for all files."""
+    if Key == 'csv/ec2-all/ec2-all.csv':
+        ec2_data = "Account,InstanceId,ImageId,LaunchTime\naccount1,i-1234567890,ami-12345,2021-01-01"
+        return {'Body': BytesIO(ec2_data.encode('utf-8'))}
+    elif Key == 'csv/all-amis/all-amis.csv':
+        ami_data = "ImageId,CreationDate,Name\nami-12345,2021-01-01,MyAMI"
+        return {'Body': BytesIO(ami_data.encode('utf-8'))}
+    elif Key == 'csv/aws-account-data/latest/aws-account-data-report.csv':
+        account_data = "AccountID,AccountName,Tribe,InvoicingContact,Owner,TechnicalContact\n123456789012,account1,Tribe1,contact1,owner1,tech1"
+        return {'Body': BytesIO(account_data.encode('utf-8'))}
+    else:
+        raise Exception("Unexpected S3 Key")
+
+def mock_get_object_failure(Bucket, Key):
+    """Simulate failure by raising an exception for certain files."""
+    if Key == 'csv/ec2-all/ec2-all.csv':
+        raise Exception("Failed to fetch EC2 report")
+    elif Key == 'csv/all-amis/all-amis.csv':
+        ami_data = "ImageId,CreationDate,Name\nami-12345,2021-01-01,MyAMI"
+        return {'Body': BytesIO(ami_data.encode('utf-8'))}
+    elif Key == 'csv/aws-account-data/latest/aws-account-data-report.csv':
+        account_data = "AccountID,AccountName,Tribe,InvoicingContact,Owner,TechnicalContact\n123456789012,account1,Tribe1,contact1,owner1,tech1"
+        return {'Body': BytesIO(account_data.encode('utf-8'))}
+    else:
+        raise Exception("Unexpected S3 Key")
+
+def test_process_reports_success(mock_s3_client):
+    """Test the process_reports function for successful execution."""
+    mock_s3 = mock_s3_client.return_value
+    mock_s3.get_object.side_effect = mock_get_object_success
+
+    input_bucket = "op-cloudcustodian-reports"
+    output_bucket = "op-patching-reports"
+    output_key = "csv/instance-patching-report.csv"
+    ec2_report_key = "csv/ec2-all/ec2-all.csv"
+    ami_report_key = "csv/all-amis/all-amis.csv"
+    account_bucket = "op-general-reports"
+    account_report_key = "csv/aws-account-data/latest/aws-account-data-report.csv"
+
+    # Call the function
+    result = process_reports(mock_s3, input_bucket, output_bucket, output_key, ec2_report_key, ami_report_key, account_bucket, account_report_key)
+
+    # Check the result contains valid CSV data
+    assert result is not None
+    assert 'AccountName' in result
+    assert 'InstanceId' in result
+    assert 'Tribe' in result
+
+def test_process_reports_failure(mock_s3_client):
+    """Test the process_reports function for failure scenario."""
+    mock_s3 = mock_s3_client.return_value
+    mock_s3.get_object.side_effect = mock_get_object_failure
+
+    input_bucket = "op-cloudcustodian-reports"
+    output_bucket = "op-patching-reports"
+    output_key = "csv/instance-patching-report.csv"
+    ec2_report_key = "csv/ec2-all/ec2-all.csv"
+    ami_report_key = "csv/all-amis/all-amis.csv"
+    account_bucket = "op-general-reports"
+    account_report_key = "csv/aws-account-data/latest/aws-account-data-report.csv"
+
+    # Call the function and expect it to raise an exception
+    with pytest.raises(Exception) as excinfo:
+        process_reports(mock_s3, input_bucket, output_bucket, output_key, ec2_report_key, ami_report_key, account_bucket, account_report_key)
+
+    # Check that the exception message matches the expected error
+    assert str(excinfo.value) == "Failed to fetch EC2 report"
+
+def test_process_reports_missing_column(mock_s3_client):
+    """Test the process_reports function for missing columns scenario."""
+    mock_s3 = mock_s3_client.return_value
+    mock_s3.get_object.side_effect = mock_get_object_success
+
+    # Modify the EC2 report to remove the 'LaunchTime' column
+    ec2_data = "Account,InstanceId,ImageId\naccount1,i-1234567890,ami-12345"
+    mock_s3.get_object.return_value = {'Body': BytesIO(ec2_data.encode('utf-8'))}
+
+    input_bucket = "op-cloudcustodian-reports"
+    output_bucket = "op-patching-reports"
+    output_key = "csv/instance-patching-report.csv"
+    ec2_report_key = "csv/ec2-all/ec2-all.csv"
+    ami_report_key = "csv/all-amis/all-amis.csv"
+    account_bucket = "op-general-reports"
+    account_report_key = "csv/aws-account-data/latest/aws-account-data-report.csv"
+
+    # Call the function
+    result = process_reports(mock_s3, input_bucket, output_bucket, output_key, ec2_report_key, ami_report_key, account_bucket, account_report_key)
+
+    # Verify that missing 'LaunchTime' column is handled gracefully (filled with N/A)
+    assert 'LaunchTime' in result
+    assert 'N/A' in result
+
+def test_lambda_handler_success(mock_s3_client):
+    """Test the lambda_handler function for successful execution."""
+    mock_s3 = mock_s3_client.return_value
+    mock_s3.get_object.side_effect = mock_get_object_success
+    mock_s3.put_object.return_value = {}  # Simulate successful upload
+
+    event = {}
+    context = {}
+
+    # Call the Lambda handler
+    response = lambda_handler(event, context)
+
+    # Ensure Lambda handler returns a successful response
+    assert response['statusCode'] == 200
+    assert "Report successfully saved" in response['body']
+
+def test_lambda_handler_failure(mock_s3_client):
+    """Test the lambda_handler function for failure handling."""
+    mock_s3 = mock_s3_client.return_value
+    mock_s3.get_object.side_effect = mock_get_object_failure
+
+    event = {}
+    context = {}
+
+    # Call the Lambda handler and expect failure
+    response = lambda_handler(event, context)
+
+    # Ensure Lambda handler returns an error response
+    assert response['statusCode'] == 500
+    assert "Error" in response['body']
+    assert "Failed to fetch EC2 report" in response['body']
