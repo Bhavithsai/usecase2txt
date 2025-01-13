@@ -117,3 +117,55 @@ Coverage XML written to file coverage/coverage.xml
 
 ================================================== short test summary info ================================================== 
 FAILED pytests/patching_report_test.py::test_process_reports_missing_column - AssertionError: assert 'N/A' in 'AccountName,AccountID,InstanceId,LaunchTime,ImageId,CreationDate,Tribe,Owner,InvoicingCo...
+
+
+
+PS C:\Users\B730369\aws-reports> python -m pytest
+==================================================== test session starts ====================================================
+platform win32 -- Python 3.10.12, pytest-8.3.4, pluggy-1.5.0
+rootdir: C:\Users\B730369\aws-reports
+configfile: pytest.ini
+testpaths: scripts/tests, pytests/
+plugins: cov-5.0.0
+collected 7 items
+
+scripts\tests\test_yaml.py ..                                                                                          [ 28%] 
+pytests\patching_report_test.py ..F..                                                                                  [100%]
+
+========================================================= FAILURES ========================================================== 
+____________________________________________ test_process_reports_missing_column ____________________________________________ 
+
+mock_s3_client = <MagicMock name='client' id='1786870034640'>
+
+    def test_process_reports_missing_column(mock_s3_client):
+        """Test the process_reports function for missing columns scenario."""
+        mock_s3 = mock_s3_client.return_value
+        mock_s3.get_object.side_effect = mock_get_object_success
+
+        # Modify the EC2 report to remove the 'LaunchTime' column
+        ec2_data = "Account,InstanceId,ImageId\naccount1,i-1234567890,ami-12345"
+        mock_s3.get_object.return_value = {'Body': BytesIO(ec2_data.encode('utf-8'))}
+
+        input_bucket = "op-cloudcustodian-reports"
+        output_bucket = "op-patching-reports"
+        output_key = "csv/instance-patching-report.csv"
+        ec2_report_key = "csv/ec2-all/ec2-all.csv"
+        ami_report_key = "csv/all-amis/all-amis.csv"
+        account_bucket = "op-general-reports"
+        account_report_key = "csv/aws-account-data/latest/aws-account-data-report.csv"
+
+        # Call the function
+        result = process_reports(mock_s3, input_bucket, output_bucket, output_key, ec2_report_key, ami_report_key, account_bucket, account_report_key)
+
+        # Verify that missing 'LaunchTime' column is handled gracefully (filled with N/A)
+        assert 'LaunchTime' in result
+>       assert 'N/A' in result.splitlines()[1]
+E       AssertionError: assert 'N/A' in 'account1,123456789012,i-1234567890,2021-01-01,ami-12345,2021-01-01,Tribe1,owner1,contact1,tech1'
+
+pytests\patching_report_test.py:110: AssertionError
+
+---------- coverage: platform win32, python 3.10.12-final-0 ----------
+Coverage XML written to file coverage/coverage.xml
+
+================================================== short test summary info ================================================== 
+FAILED pytests/patching_report_test.py::test_process_reports_missing_column - AssertionError: assert 'N/A' in 'account1,123456789012,i-1234567890,2021-01-01,ami-12345,2021-01-01,Tribe1,owner1,contact...
