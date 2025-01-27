@@ -1,0 +1,25 @@
+{
+  "errorMessage": "Unable to import module 'main': Unable to import required dependencies:\nnumpy: Error importing numpy: you should not try to import numpy from\n        its source directory; please exit the numpy source tree, and relaunch\n        your python interpreter from there.",
+  "errorType": "Runtime.ImportModuleError",
+  "requestId": "",
+  "stackTrace": []
+}
+
+Function Logs:
+[ERROR] Runtime.ImportModuleError: Unable to import module 'main': Unable to import required dependencies:
+numpy: Error importing numpy: you should not try to import numpy from
+        its source directory; please exit the numpy source tree, and relaunch
+        your python interpreter from there.
+Traceback (most recent call last):
+INIT_REPORT Init Duration: 442.89 ms	Phase: init	Status: error	Error Type: Runtime.ImportModuleError
+[ERROR] Runtime.ImportModuleError: Unable to import module 'main': Unable to import required dependencies:
+numpy: Error importing numpy: you should not try to import numpy from
+        its source directory; please exit the numpy source tree, and relaunch
+        your python interpreter from there.
+Traceback (most recent call last):
+INIT_REPORT Init Duration: 5060.64 ms	Phase: invoke	Status: error	Error Type: Runtime.ImportModuleError
+START RequestId: 5bb880f1-e587-46ed-a853-511bbf1256cb Version: $LATEST
+END RequestId: 5bb880f1-e587-46ed-a853-511bbf1256cb
+REPORT RequestId: 5bb880f1-e587-46ed-a853-511bbf1256cb	Duration: 5149.48 ms	Billed Duration: 5150 ms	Memory Size: 128 MB	Max Memory Used: 64 MB	Status: error	Error Type: Runtime.ImportModuleError
+
+Request ID: 5bb880f1-e587-46ed-a853-511bbf1256cb
