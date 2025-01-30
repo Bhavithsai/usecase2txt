@@ -1,0 +1,17 @@
+});
+    this.reportingBucket.grantRead(opPatchingLambda, 'csv/aws-account-data/latest/aws-account-data-report.csv');
+    const keyArn = this.node.tryGetContext('KeyArn');
+    const custodianBucket = s3.Bucket.fromBucketAttributes(this, 'CustodianBucket', {
+      bucketName: 'op-cloudcustodian-reports',
+      encryptionKey: kms.Key.fromKeyArn(this, 'CustodianKey', keyArn),
+    });
+    custodianBucket.grantRead(opPatchingLambda, 'csv/ec2-all/ec2-all.csv');
+    custodianBucket.grantRead(opPatchingLambda, 'csv/all-amis/all-amis.csv');
+    const outputBucket = s3.Bucket.fromBucketName(this, 'OutputBucket', 'op-patching-reports');
+    outputBucket.grantWrite(opPatchingLambda, 'csv/instance-patching-report.csv');
+    this.addTrigger(this.reportingBucket, opPatchingLambda, 'csv/aws-account-data/latest/aws-account-data-report.csv');
+    this.addTrigger(custodianBucket, opPatchingLambda, 'csv/ec2-all/ec2-all.csv');
+    this.addTrigger(custodianBucket, opPatchingLambda, 'csv/all-amis/all-amis.csv');
+    // const rule= new events.Rule(this, 'CombineRule',{schedule:events.Schedule.expression('cron(0 6 * * ? *)')});
+    // rule.addTarget(new events_targets.LambdaFunction(opPatchingLambda))
+  }
