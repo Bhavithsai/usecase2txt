@@ -1,4 +1,11 @@
-TCHINGSTATUS	UPTODATE
+olumn name	Values	Description
+tag:Name	custom	https://oppconfluence.eficode.com/display/AWSPLAT/ec2-all report has tag:Name which is helpful to identify which AMI is used.
+This field should be added to the report, in a column BEFORE InstanceId column
+OPAMI_USED	YES
+NO	This fields answers to the question: "is this an OP AMI or an own image created by the application team themsevels?"
+This can be inferred from Base AMI and ECS AMI (see AMI Releases, Base Images)
+== is the AMI ID value from the ec2 report the same than any of the ids in the Base AMI or ECS AMI lists?
+PATCHINGSTATUS	UPTODATE
 OUTDATED
 UNKNOWN	This fields answers to the question - "is a patch required, because current version is outdated?"
 In case of an OP AMI (Base or ECS), we know which is the latest version, so we can compare the one used in the account with the last one in Base AMI/ECS AMI
@@ -14,3 +21,6 @@ If we do not have this information, we set the value as UNKNOWN
 Note: initially we do not have this information at AWSPLAT team, so just set it to UNKNOWN for all entries by default.
  
 We will have a separate ticket to store this data for manual updates. 
+Alias	custom	As taken from https://oppconfluence.eficode.com/display/AWSPLAT/aws-account-data-report 
+Application	custom	As taken from https://oppconfluence.eficode.com/display/AWSPLAT/aws-account-data-report 
+Tribe	custom	As taken from https://oppconfluence.eficode.com/display/AWSPLAT/aws-account-data-report 
