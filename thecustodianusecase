@@ -1,0 +1,33 @@
+tag:Name	custom	https://oppconfluence.eficode.com/display/AWSPLAT/ec2-all report has tag:Name which is helpful to identify which AMI is used.
+This field should be added to the report, in a column BEFORE InstanceId column
+OPAMI_USED	YES
+NO	This fields answers to the question: "is this an OP AMI or an own image created by the application team themsevels?"
+This can be inferred from Base AMI and ECS AMI (see AMI Releases, Base Images)
+== is the AMI ID value from the ec2 report the same than any of the ids in the Base AMI or ECS AMI lists?
+PATCHINGSTATUS	UPTODATE
+OUTDATED
+UNKNOWN	This fields answers to the question - "is a patch required, because current version is outdated?"
+In case of an OP AMI (Base or ECS), we know which is the latest version, so we can compare the one used in the account with the last one in Base AMI/ECS AMI
+1) if same, last is used, so the value should be UPTODATE
+2) if different, the image used by team is outdated, so the value should be OUTDATED
+In case of a custom image used,
+1) if the LaunchTime OR CreationDate is older than 1 year, we can set it as OUTDATED
+2) if not, we can set the value as UNKNOWN
+EXCEPTIONPERMIT	YES
+NO
+UNKNOWN	Permission for exception. This means that even if the PATCHINGSTATUS is OUTDATED and/or OPAMI_USED is NO, the application team owning the instance has the permission for that, which they have done together with Risk Management team and have a Rego exception documented. 
+If we do not have this information, we set the value as UNKNOWN
+Note: initially we do not have this information at AWSPLAT team, so just set it to UNKNOWN for all entries by default.
+ 
+We will have a separate ticket to store this data for manual updates. 
+Alias	custom	As taken from https://oppconfluence.eficode.com/display/AWSPLAT/aws-account-data-report 
+Application	custom	As taken from https://oppconfluence.eficode.com/display/AWSPLAT/aws-account-data-report 
+Tribe	custom	As taken from https://oppconfluence.eficode.com/display/AWSPLAT/aws-account-data-report 
+Business Segment	custom	As taken from https://eu-central-1.console.aws.amazon.com/s3/object/op-cmdb-thinking-portfolio?region=eu-central-1&bucketType=general&prefix=output/latest/thinking-portfolio-cmdb-accounts-data-report.csv or https://oppconfluence.eficode.com/display/AWSPLAT/thinking-portfolio-cmdb-accounts-data-report 
+Server Name	custom	Might be possible to extract it from the ec2 API using key-name, something like:
+https://docs.aws.amazon.com/systems-manager/latest/APIReference/API_DescribeInstanceInformation.html 
+aws ec2 describe-instances --filters Name=instance-state-name,Values=running --query 'Reservations[].Instances[].[Tags[?Key==`Name`].Value | [0],InstanceId,Platform,State.Name,PrivateIpAddress,PublicIpAddress,InstanceType,PublicDnsName,KeyName]' 
+Operating System	custom	Might be possible to extract it from the AMI name, or get it via PlatformDetails parameter from ec2 API, or SSM API if present
+https://docs.aws.amazon.com/systems-manager/latest/APIReference/API_DescribeInstanceInformation.html 
+ 
+aws ec2 describe-instances --query 'Reservations[*].Instances[*].[InstanceId,PlatformDetails]' --output text  
